@@ -16,6 +16,8 @@ router.put('/users/:cedula', adminController.updateStudentProfile);
 router.put('/courses/:id', adminController.updateCourse);
 router.put('/courses/:courseId/modules/:moduleId', adminController.updateCourseModule);
 router.get('/certificate/download', adminController.downloadStudentCertificate);
+router.get('/certificate/download-acta', adminController.downloadStudentActa);
+
 
 // Middleware to require engineer software role
 function requireSoftwareEngineer(req, res, next) {

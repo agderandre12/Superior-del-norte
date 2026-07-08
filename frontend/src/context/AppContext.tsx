@@ -2,7 +2,12 @@ import React, { createContext, useState, useEffect, useCallback, ReactNode } fro
 
 export const AppContext = createContext<any>(null);
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// API base URL resolved from the Vite environment. In dev it defaults to the
+// local backend; in production it MUST be set at build time via
+// VITE_API_BASE_URL (e.g. https://api.institutosuperiordelnorte.co/api).
+// Hardcoding localhost here would break every request in a deployed build.
+const API_BASE_URL =
+  (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Single source of truth for privileged roles. Mirrors backend ADMIN_ROLES.
 export const ADMIN_ROLES = ['administrador', 'ingeniero_software'] as const;
@@ -284,6 +289,35 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
+  const downloadActa = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/certificate/download-acta?courseId=${activeCourseId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'No se pudo descargar el acta de grado');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const currentCourse = studentCourses.find(c => c.id === activeCourseId);
+      const filename = currentCourse
+        ? `Acta_de_Grado_${currentCourse.titulo.replace(/\s+/g, '_')}_${user.cedula}.pdf`
+        : `Acta_de_Grado_${user.cedula}.pdf`;
+      a.target = '_blank';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   const fetchAdminMetrics = useCallback(async () => {
     if (!token) return;
     try {
@@ -550,6 +584,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       completeModule,
       submitExam,
       downloadCertificate,
+      downloadActa,
       adminMetrics,
       adminUsers,
       courses,

@@ -13,5 +13,6 @@ router.get('/exam/questions', studentController.getExamQuestions);
 router.post('/exam/submit', studentController.submitExam);
 router.get('/certificate/detail', studentController.getCertificateDetail);
 router.get('/certificate/download', studentController.downloadCertificate);
+router.get('/certificate/download-acta', studentController.downloadActa);
 
 module.exports = router;

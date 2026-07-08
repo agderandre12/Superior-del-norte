@@ -140,21 +140,6 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Test Credentials Seed Banner */}
-          <div style={{
-            marginTop: '28px',
-            padding: '14px',
-            borderRadius: '16px',
-            background: 'var(--isn-bg-light)',
-            fontSize: '0.75rem',
-            color: 'var(--isn-charcoal)',
-            textAlign: 'center'
-          }}>
-            <p style={{ fontWeight: 700, color: 'var(--isn-blue)', marginBottom: '6px' }}>🔑 Credenciales de Acceso Demo</p>
-            <p style={{ marginBottom: '4px' }}>Cédula: <code style={{ color: 'var(--isn-blue-dark)', background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>123456789</code></p>
-            <p>Contraseña: <code style={{ color: 'var(--isn-blue-dark)', background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>password123</code></p>
-          </div>
-
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
             <button
               onClick={() => navigate('/')}

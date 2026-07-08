@@ -519,7 +519,37 @@ const AdminDashboard = () => {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDownloadStudentActa = async (studentCedula, courseId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/certificate/download-acta?cedula=${studentCedula}&courseId=${courseId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'No se pudo descargar el acta de grado');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      const currentCourse = courses.find(c => c.id === courseId);
+      const courseTitle = currentCourse ? currentCourse.titulo : 'Curso';
+      
+      const filename = `Acta_de_Grado_${courseTitle.replace(/\s+/g, '_')}_${studentCedula}.pdf`;
+      a.target = '_blank';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
       alert(err.message);
     }
   };
@@ -947,28 +977,59 @@ const AdminDashboard = () => {
                           <span>Editar Cursos</span>
                         </button>
 
-                        {student.certified_courses && student.certified_courses.length > 0 && (
-                          <button
-                            onClick={() => handleDownloadStudentCertificate(student.cedula, student.certified_courses[0])}
-                            style={{
-                              background: 'rgba(15, 44, 89, 0.05)',
-                              border: 'none',
-                              color: 'var(--isn-blue)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              fontSize: '0.85rem',
-                              fontWeight: 700,
-                              padding: '6px 12px',
-                              borderRadius: '9999px',
-                              transition: 'background-color 0.15s, color 0.15s'
-                            }}
-                          >
-                            <Download size={14} color="var(--isn-gold)" />
-                            <span>Diploma</span>
-                          </button>
-                        )}
+                        {student.certified_courses && student.certified_courses.length > 0 && (() => {
+                          const certCourseId = student.certified_courses[0];
+                          const certCourse = courses.find(c => c.id === certCourseId);
+                          const isDirect = certCourse && certCourse.certificacion_directa === 1;
+                          
+                          return (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => handleDownloadStudentCertificate(student.cedula, certCourseId)}
+                                style={{
+                                  background: 'rgba(15, 44, 89, 0.05)',
+                                  border: 'none',
+                                  color: 'var(--isn-blue)',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '0.85rem',
+                                  fontWeight: 700,
+                                  padding: '6px 12px',
+                                  borderRadius: '9999px',
+                                  transition: 'background-color 0.15s, color 0.15s'
+                                }}
+                              >
+                                <Download size={14} color="var(--isn-gold)" />
+                                <span>{isDirect ? 'Diploma' : 'Descargar'}</span>
+                              </button>
+                              
+                              {isDirect && (
+                                <button
+                                  onClick={() => handleDownloadStudentActa(student.cedula, certCourseId)}
+                                  style={{
+                                    background: 'rgba(22, 163, 74, 0.05)',
+                                    border: 'none',
+                                    color: 'var(--accent-emerald)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 700,
+                                    padding: '6px 12px',
+                                    borderRadius: '9999px',
+                                    transition: 'background-color 0.15s, color 0.15s'
+                                  }}
+                                >
+                                  <Download size={14} color="var(--accent-emerald)" />
+                                  <span>Acta</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))

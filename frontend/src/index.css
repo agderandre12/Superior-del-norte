@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=UnifrakturMaguntia&family=Great+Vibes&display=swap');
 
 :root {
   /* ISN Brand Colors */
@@ -453,5 +454,481 @@ h1, h2, h3, h4, h5, h6 {
   .nav-links-responsive {
     display: none !important;
   }
+}
+
+/* ============================================================
+   BACHILLER ACADÉMICO — CINEMATIC ASYMMETRIC SPLIT (65/35)
+   ============================================================ */
+
+/* Token extras for the cinematic view */
+:root {
+  --isn-cinema-dark: #1e2229;
+  --isn-cinema-dark-2: #252a35;
+  --isn-cinema-border: #353b48;
+  --isn-parchment: #fbf8f0;
+  --isn-parchment-2: #f4ecd8;
+  --isn-gothic: 'Cinzel', 'Playfair Display', Georgia, serif;
+  --isn-blackletter: 'UnifrakturMaguntia', 'Playfair Display', serif;
+  --isn-easing: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Gothic / blackletter typefaces for the formal diploma title are imported at
+   the top of this file (@import must precede all other statements). */
+
+/* --- 1. Layout container & asymmetric grid (65 / 35) --- */
+.bachiller-stage {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 8px;
+  /* Layout Fade-In & Slide: opacity 0 -> 1, translateY(15px) -> 0, 0.8s */
+  opacity: 0;
+  transform: translateY(15px);
+  animation: isn-fade-in-slide 0.8s var(--isn-easing) forwards;
+}
+
+.bachiller-split {
+  display: grid;
+  grid-template-columns: 65fr 35fr;
+  gap: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 30px 70px -20px rgba(15, 44, 89, 0.35),
+              0 12px 30px -15px rgba(0, 0, 0, 0.25);
+  min-height: 620px;
+  position: relative;
+}
+
+@media (max-width: 980px) {
+  .bachiller-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- 2. Principal panel (65%) — marfil / parchment diploma --- */
+.bachiller-panel-main {
+  background:
+    radial-gradient(circle at 50% 0%, #ffffff 0%, var(--isn-parchment) 55%, var(--isn-parchment-2) 100%);
+  padding: 38px 42px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* gold inner filigree frame */
+.bachiller-frame {
+  position: absolute;
+  inset: 14px;
+  border: 1.5px solid var(--isn-gold);
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+.bachiller-frame::before,
+.bachiller-frame::after {
+  content: '';
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--isn-gold);
+}
+.bachiller-frame::before { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+.bachiller-frame::after  { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
+.bachiller-diploma {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.bachiller-crest-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  margin-bottom: 6px;
+}
+
+.bachiller-republic {
+  font-family: var(--isn-gothic);
+  font-weight: 700;
+  letter-spacing: 5px;
+  font-size: 0.95rem;
+  color: var(--isn-blue);
+  margin-top: 8px;
+}
+.bachiller-inst {
+  font-family: var(--isn-gothic);
+  font-weight: 900;
+  letter-spacing: 1px;
+  font-size: 1.5rem;
+  color: var(--isn-blue);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.bachiller-resolution {
+  font-size: 0.62rem;
+  color: #475569;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+.bachiller-confiere {
+  font-family: var(--isn-blackletter);
+  font-size: 1.8rem;
+  color: var(--isn-gold);
+  margin: 14px 0 4px;
+}
+.bachiller-student-name {
+  font-family: var(--isn-gothic);
+  font-weight: 900;
+  font-size: 1.9rem;
+  color: var(--isn-blue);
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--isn-gold);
+  padding: 0 14px 4px;
+  margin: 4px 0 8px;
+}
+.bachiller-student-id {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+.bachiller-titulo-de {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #475569;
+}
+.bachiller-titulo-nombre {
+  font-family: var(--isn-blackletter);
+  font-size: 2.4rem;
+  color: var(--isn-blue);
+  text-shadow: 1px 1px 2px rgba(15, 44, 89, 0.15);
+  margin: 4px 0;
+}
+.bachiller-legal {
+  font-size: 0.76rem;
+  color: #475569;
+  line-height: 1.55;
+  max-width: 640px;
+  margin: 12px auto 16px;
+  text-align: justify;
+  font-weight: 500;
+}
+.bachiller-firmas {
+  display: flex;
+  justify-content: space-between;
+  width: 78%;
+  margin-top: auto;
+  padding-top: 14px;
+}
+.bachiller-firma-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 220px;
+}
+.bachiller-firma-grafica {
+  font-family: 'Great Vibes', cursive;
+  font-size: 2rem;
+  color: #0d1e3d;
+  opacity: 0.95;
+  user-select: none;
+  height: 34px;
+}
+.bachiller-firma-line {
+  width: 100%;
+  height: 1px;
+  background: #94a3b8;
+  margin-bottom: 5px;
+}
+.bachiller-firma-name { font-size: 0.72rem; font-weight: 700; color: #0f172a; }
+.bachiller-firma-charge { font-size: 0.62rem; color: #64748b; font-weight: 600; text-transform: uppercase; }
+.bachiller-fecha {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  font-style: italic;
+  margin-top: 12px;
+}
+
+/* --- 3. Lateral panel (35%) — deep cinematic dark --- */
+.bachiller-panel-side {
+  background: linear-gradient(160deg, var(--isn-cinema-dark) 0%, #15181f 100%);
+  color: #E5E7EB;
+  padding: 36px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+  transform-origin: right center;
+  /* Split Reveal: expand horizontally after the stage appears */
+  opacity: 0;
+  transform: scaleX(0.55);
+  animation: isn-split-reveal 0.7s var(--isn-easing) 0.45s forwards;
+}
+.bachiller-panel-side::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -30%;
+  width: 80%;
+  height: 80%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.bachiller-side-eyebrow {
+  font-family: var(--isn-gothic);
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--isn-gold);
+  font-weight: 700;
+}
+.bachiller-side-title {
+  font-family: var(--isn-gothic);
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.bachiller-side-sub {
+  font-size: 0.78rem;
+  color: #9CA3AF;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.bachiller-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bachiller-meta-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--isn-cinema-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.bachiller-meta-card .label {
+  font-size: 0.6rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  font-weight: 700;
+}
+.bachiller-meta-card .value {
+  font-family: 'Courier New', monospace;
+  font-size: 0.92rem;
+  color: var(--isn-gold);
+  font-weight: 700;
+  margin-top: 3px;
+  word-break: break-all;
+}
+
+.bachiller-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--isn-cinema-border);
+  border-radius: 14px;
+}
+.bachiller-qr-wrap img {
+  width: 108px;
+  height: 108px;
+  background: #ffffff;
+  padding: 6px;
+  border-radius: 8px;
+}
+.bachiller-qr-caption {
+  font-size: 0.66rem;
+  color: #9CA3AF;
+  text-align: center;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.bachiller-verify-code {
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: var(--isn-gold);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* --- 4. Premium download buttons (dark side microinteractions) --- */
+.bachiller-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+.bachiller-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 22px;
+  border-radius: 9999px;
+  font-family: var(--isn-title);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border: none;
+  overflow: hidden;
+  transition: transform 0.25s var(--isn-easing),
+              box-shadow 0.25s var(--isn-easing),
+              background 0.25s ease;
+}
+.bachiller-btn-primary {
+  background: linear-gradient(135deg, var(--isn-gold) 0%, #B89028 100%);
+  color: #1e2229;
+  box-shadow: 0 8px 20px -6px rgba(212, 175, 55, 0.5);
+}
+.bachiller-btn-secondary {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  border: 1px solid var(--isn-cinema-border);
+}
+/* internal linear shine that sweeps across on hover */
+.bachiller-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  transform: skewX(-20deg);
+  transition: left 0.6s var(--isn-easing);
+  pointer-events: none;
+}
+.bachiller-btn:hover {
+  transform: translateY(-2px);
+}
+.bachiller-btn-primary:hover {
+  box-shadow: 0 14px 28px -8px rgba(212, 175, 55, 0.65);
+}
+.bachiller-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--isn-gold);
+}
+.bachiller-btn:hover::after {
+  left: 130%;
+}
+.bachiller-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.bachiller-back-btn {
+  background: none;
+  border: none;
+  color: var(--isn-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 18px;
+  padding: 0;
+}
+
+/* --- 5. Shimmer / Glow (processing sweep over the diploma) --- */
+.bachiller-shimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(212, 175, 55, 0.0) 40%,
+    rgba(212, 175, 55, 0.55) 50%,
+    rgba(255, 255, 255, 0.65) 52%,
+    rgba(212, 175, 55, 0.0) 60%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+}
+.bachiller-shimmer.is-active {
+  opacity: 1;
+  animation: isn-shimmer-sweep 1.4s ease-in-out infinite;
+}
+.bachiller-processing-badge {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: rgba(15, 44, 89, 0.92);
+  color: var(--isn-gold);
+  font-family: var(--isn-gothic);
+  font-size: 0.66rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 7px 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--isn-gold);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- 6. Keyframes (cinematic choreography) --- */
+@keyframes isn-fade-in-slide {
+  0%   { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes isn-split-reveal {
+  0%   { opacity: 0; transform: scaleX(0.55); }
+  100% { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes isn-shimmer-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bachiller-stage,
+  .bachiller-panel-side,
+  .bachiller-shimmer.is-active {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Print: only the diploma area, hide chrome */
+@media print {
+  @page { size: landscape; margin: 0; }
+  body * { visibility: hidden; }
+  #bachiller-print-area, #bachiller-print-area * { visibility: visible; }
+  #bachiller-print-area {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    margin: 0; padding: 0; box-shadow: none; border: none;
+  }
+  nav, footer, .bachiller-panel-side, .bachiller-back-btn { display: none !important; }
 }
 

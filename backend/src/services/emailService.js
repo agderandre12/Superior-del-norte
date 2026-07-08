@@ -119,6 +119,22 @@ async function sendWelcomeEmail(studentData) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const recipientEmail = studentData.email || `${studentData.cedula}@institutosuperiordelnorte-student.co`;
 
+    // SECURITY: emailing plaintext passwords through SMTP leaks credentials
+    // at rest in every recipient mailbox (OWASP A02:2021). Disabled by default.
+    // Operators may opt-in per-deployment via EMAIL_INCLUDE_PASSWORD=true when a
+    // secure channel reset flow is not yet available.
+    const includePassword = String(process.env.EMAIL_INCLUDE_PASSWORD || '').toLowerCase() === 'true';
+    const credentialBlock = includePassword && studentData.password
+      ? `
+                          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Cédula de acceso</p>
+                          <p style="margin:0 0 18px;color:#0F2C59;font-size:22px;font-weight:700;font-family:monospace;">${studentData.cedula}</p>
+                          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contraseña provisional</p>
+                          <p style="margin:0;color:#0F2C59;font-size:22px;font-weight:700;font-family:monospace;">${studentData.password}</p>`
+      : `
+                          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Cédula de acceso</p>
+                          <p style="margin:0;color:#0F2C59;font-size:22px;font-weight:700;font-family:monospace;">${studentData.cedula}</p>
+                          <p style="margin:14px 0 0;color:#64748b;font-size:13px;line-height:1.6;">Por razones de seguridad, tu contraseña provisional te será entregada por un canal seguro por el equipo administrativo. Cambiala tras tu primer ingreso.</p>`;
+
     const mailOptions = {
       from: fromAddress,
       to: `"${studentData.nombre_completo}" <${recipientEmail}>`,
@@ -150,10 +166,7 @@ async function sendWelcomeEmail(studentData) {
                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;margin-bottom:28px;">
                       <tr>
                         <td style="padding:24px;">
-                          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Cédula de acceso</p>
-                          <p style="margin:0 0 18px;color:#0F2C59;font-size:22px;font-weight:700;font-family:monospace;">${studentData.cedula}</p>
-                          <p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Contraseña provisional</p>
-                          <p style="margin:0;color:#0F2C59;font-size:22px;font-weight:700;font-family:monospace;">${studentData.password}</p>
+                          ${credentialBlock}
                         </td>
                       </tr>
                     </table>
@@ -222,15 +235,121 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const recipientEmail = studentData.email || `${studentData.cedula}@institutosuperiordelnorte-student.co`;
 
-    // Generar el PDF del certificado en memoria para adjuntarlo.
-    // Usa la plantilla HTML del curso si está disponible; si no, el layout institucional.
-    const pdfBuffer = await generateCertificatePDFBuffer(certData, certData.certificado_template || null);
+    const db = require('../repositories/dbRepository');
+    const academicTemplateService = require('./academicTemplateService');
 
-    const mailOptions = {
-      from: fromAddress,
-      to: `"${studentData.nombre_completo}" <${recipientEmail}>`,
-      subject: `🎓 ¡Felicitaciones! Tu certificado de "${courseTitle}" está listo`,
-      html: `
+    const courses = await db.getCourses();
+    const course = courses.find(c => c.id === certData.curso_id);
+    const isDirect = course && course.certificacion_directa === 1;
+
+    let attachments = [];
+    let subject = `🎓 ¡Felicitaciones! Tu certificado de "${courseTitle}" está listo`;
+    let bodyHtml = '';
+
+    if (isDirect) {
+      subject = `🎓 ¡Felicitaciones! Tu título de Bachiller Académico y Acta de Grado están listos`;
+      
+      const fullUser = await db.getUser(studentData.cedula);
+      const diplomaHtml = academicTemplateService.generateDiplomaTemplate(fullUser, certData, course);
+      const actaHtml = academicTemplateService.generateActaTemplate(fullUser, certData, course);
+
+      const diplomaBuffer = await generateCertificatePDFBuffer(certData, diplomaHtml);
+      const actaBuffer = await generateCertificatePDFBuffer(certData, actaHtml);
+
+      attachments.push({
+        filename: `Diploma_Bachiller_${studentData.cedula}.pdf`,
+        content: diplomaBuffer,
+        contentType: 'application/pdf'
+      });
+      attachments.push({
+        filename: `Acta_de_Grado_${studentData.cedula}.pdf`,
+        content: actaBuffer,
+        contentType: 'application/pdf'
+      });
+
+      bodyHtml = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:30px 0;">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="background:linear-gradient(135deg,#0F2C59 0%,#1e3d73 100%);padding:40px 40px 30px;text-align:center;">
+                    <div style="font-size:48px;margin-bottom:12px;">🎓</div>
+                    <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:800;">¡Título de Bachiller Académico!</h1>
+                    <p style="color:#D4AF37;margin:8px 0 0;font-size:14px;font-weight:600;letter-spacing:1px;">INSTITUTO SUPERIOR DEL NORTE</p>
+                  </td>
+                </tr>
+                <!-- Body -->
+                <tr>
+                  <td style="padding:40px;">
+                    <h2 style="color:#0F2C59;margin:0 0 16px;font-size:20px;">¡Felicitaciones, ${studentData.nombre_completo}!</h2>
+                    <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
+                       Nos complace informarte que has culminado exitosamente los requisitos del programa de
+                       <strong style="color:#0F2C59;">"Bachillerato Académico"</strong>.
+                    </p>
+                    <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
+                       Se han generado dinámicamente y de manera paralela tus dos documentos oficiales: el <strong>Diploma de Bachiller</strong> y el <strong>Acta de Grado</strong> correspondientes, emitidos en la ciudad de Medellín, Colombia.
+                    </p>
+                    <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
+                      Ambos documentos oficiales en formato PDF se encuentran adjuntos en este correo electrónico. También puedes descargarlos y visualizarlos en tu portal de estudiante en cualquier momento.
+                    </p>
+                    <!-- Certificate Info -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;margin-bottom:28px;">
+                      <tr>
+                        <td style="padding:20px 24px;">
+                          <table width="100%">
+                            <tr>
+                              <td style="color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;padding-bottom:4px;">N° Certificado</td>
+                              <td style="color:#64748b;font-size:12px;font-weight:600;text-transform:uppercase;padding-bottom:4px;">Código de Verificación</td>
+                            </tr>
+                            <tr>
+                              <td style="color:#166534;font-size:18px;font-weight:700;font-family:monospace;">${certData.numero_certificado}</td>
+                              <td style="color:#166534;font-size:18px;font-weight:700;font-family:monospace;">${certData.codigo_verificacion}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                    <!-- CTA Buttons -->
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="padding-bottom:12px;">
+                          <a href="${frontendUrl}/#verify=${certData.codigo_verificacion}" style="display:inline-block;background:linear-gradient(135deg,#0F2C59,#1a4a8a);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:15px;font-weight:700;">
+                            Verificar Autenticidad en Línea →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                  <td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+                    <p style="color:#94a3b8;font-size:12px;margin:0;">
+                      Título oficial emitido por Instituto Superior del Norte LMS | N° ${certData.numero_certificado}<br>
+                      Fecha de graduación: ${certData.fecha_emision}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+        </body>
+        </html>
+      `;
+    } else {
+      const pdfBuffer = await generateCertificatePDFBuffer(certData, certData.certificado_template || null);
+      attachments.push({
+        filename: `Certificado_${courseTitle.replace(/\s+/g, '_')}_${studentData.cedula}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      });
+
+      bodyHtml = `
         <!DOCTYPE html>
         <html lang="es">
         <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -302,14 +421,15 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
           </table>
         </body>
         </html>
-      `,
-      attachments: [
-        {
-          filename: `Certificado_${courseTitle.replace(/\s+/g, '_')}_${studentData.cedula}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf'
-        }
-      ]
+      `;
+    }
+
+    const mailOptions = {
+      from: fromAddress,
+      to: `"${studentData.nombre_completo}" <${recipientEmail}>`,
+      subject: subject,
+      html: bodyHtml,
+      attachments: attachments
     };
 
     const info = await transporter.sendMail(mailOptions);

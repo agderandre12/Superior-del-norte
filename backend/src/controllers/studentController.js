@@ -3,6 +3,7 @@ const { generateCertificatePDF } = require('../services/pdfService');
 const { normalizeToUtf8 } = require('../middleware/auth');
 const { sendCertificateEmail } = require('../services/emailService');
 const { interpolateTemplate } = require('../services/certificateTemplateService');
+const academicTemplateService = require('../services/academicTemplateService');
 
 function generateVerificationCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -283,9 +284,15 @@ async function downloadCertificate(req, res, next) {
     const courseTitle = course ? course.titulo : 'Manipulación de Alimentos';
 
     const fullUser = await db.getUser(req.user.cedula);
-    const htmlTemplate = course && course.certificado_template
-      ? interpolateTemplate(course.certificado_template, fullUser, cert, course)
-      : null;
+    
+    let htmlTemplate = null;
+    if (course && course.certificacion_directa === 1) {
+      htmlTemplate = academicTemplateService.generateDiplomaTemplate(fullUser, cert, course);
+    } else {
+      htmlTemplate = course && course.certificado_template
+        ? interpolateTemplate(course.certificado_template, fullUser, cert, course)
+        : null;
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Certificado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`);
@@ -306,6 +313,42 @@ async function downloadCertificate(req, res, next) {
   }
 }
 
+async function downloadActa(req, res, next) {
+  try {
+    let courseId = parseInt(req.query.courseId);
+    if (!courseId) {
+      const studentCourses = await db.getStudentCourses(req.user.cedula);
+      if (studentCourses && studentCourses.length > 0) {
+        courseId = studentCourses[0].id;
+      } else {
+        courseId = 1;
+      }
+    }
+
+    const cert = await db.getCertificateByCedula(req.user.cedula, courseId);
+    if (!cert) {
+      return res.status(400).json({ error: 'Debe completar y aprobar la certificación para descargar su acta de grado.' });
+    }
+
+    const courses = await db.getCourses();
+    const course = courses.find(c => c.id === courseId);
+    if (!course || course.certificacion_directa !== 1) {
+      return res.status(400).json({ error: 'Este curso no cuenta con acta de grado.' });
+    }
+
+    const courseTitle = course.titulo;
+    const fullUser = await db.getUser(req.user.cedula);
+    const htmlTemplate = academicTemplateService.generateActaTemplate(fullUser, cert, course);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Acta_de_Grado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`);
+
+    await generateCertificatePDF(res, {}, htmlTemplate);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getStudentCourses,
   getCourseContent,
@@ -314,5 +357,6 @@ module.exports = {
   getExamQuestions,
   submitExam,
   getCertificateDetail,
-  downloadCertificate
+  downloadCertificate,
+  downloadActa
 };

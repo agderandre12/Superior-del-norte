@@ -152,7 +152,11 @@ Los siguientes endpoints ahora aceptan `courseId` como parámetro en el query o 
 6. **Detalle de Certificado:** `GET /api/certificate/detail?courseId=X`
    - Retorna los metadatos del diploma más la plantilla HTML interpolada del curso (`certificado_template`) si existe. Tags soportados: `{{NOMBRE}}`, `{{CEDULA}}`, `{{FECHA_EXPEDICION}}`, `{{MUNICIPIO_EXPEDICION}}`, `{{ANIO_NACIMIENTO}}`, `{{CODIGO_VERIFICACION}}`, `{{FECHA_EMISION}}`.
 7. **Verificación Pública de Certificado:** `GET /api/certificate/verify/:codigo`
-   - Ruta pública (sin autenticación). Valida la autenticidad de un diploma por su código de verificación. Retorna `{ valido, usuario, cedula, fecha_emision, codigo_verificacion, calificacion_obtenida, curso_titulo, numero_certificado }`. HTTP 404 si el código no existe.
+   - Ruta pública (sin autenticación). Valida la autenticidad de un diploma por su código de verificación. Retorna `{ valido, usuario, nombre_completo, cedula, fecha_emision, codigo_verificacion, calificacion_obtenida, curso_titulo, numero_certificado }`.
+   - **Validación de formato:** el `codigo` debe cumplir el patrón `^[A-Za-z0-9]{3,5}-[A-Za-z0-9]{3,6}-[A-Za-z0-9]{3,6}$` (máx 50 caracteres). Códigos mal formados → `400`.
+   - **Rate limiting:** 30 peticiones/minuto/IP para mitigar enumeración de códigos. Excedido → `429` con header `Retry-After`.
+   - **Códigos de estado:** `200` (válido), `400` (formato inválido), `404` (formato válido pero inexistente), `429` (rate-limited).
+   - **Integridad de datos:** el endpoint devuelve únicamente campos públicos. El frontend **no debe** usar valores fallback hardcodeados (`|| 100`, `|| 'AS-2026-0001'`) — mostrar exactamente lo que devuelve el API o un guion `—` si el campo está ausente.
 8. **Listar Cursos (simplificado):** `GET /api/admin/courses/list`
    - Retorna un arreglo simplificado `[{ id, titulo }]` de todos los cursos (requiere admin).
 
@@ -209,15 +213,21 @@ Permite matricular a un estudiante, registrando sus datos de identificación, pr
   "cedula": "987654321",
   "nombre_completo": "María García",
   "password": "provisional123",
+  "email": "maria@correo.com",
   "cursos": [1],
   "fecha_expedicion_cedula": "2018-09-24",
   "municipio_expedicion_cedula": "Bucaramanga",
   "municipio_nacimiento": "Giron",
   "anio_nacimiento": 1996,
   "pago_realizado": 1,
-  "certificar_inmediatamente": true
+  "certificar_inmediatamente": true,
+  "vipass": false
 }
 ```
+- **Campos opcionales:**
+  - `email` (string): correo real del estudiante. Si se omite, se deriva `${cedula}@institutosuperiordelnorte-student.co`.
+  - `vipass` (boolean, default `false`): acceso VIP. Si es `true`, fuerza `certificar_inmediatamente = true` y dispara la entrega del certificado por correo corporativo.
+  - `certificar_inmediatamente` (boolean, default `false`): bypass de examen y progreso.
 - **Response (201 Created):**
 ```json
 {
@@ -231,10 +241,13 @@ Permite matricular a un estudiante, registrando sus datos de identificación, pr
     "municipio_expedicion_cedula": "Bucaramanga",
     "municipio_nacimiento": "Giron",
     "anio_nacimiento": 1996,
-    "pago_realizado": 1
+    "pago_realizado": 1,
+    "email": "maria@correo.com",
+    "vipass": 0
   }
 }
 ```
+- **Seguridad del email de bienvenida:** por defecto (`EMAIL_INCLUDE_PASSWORD` no definido o `false`), el correo de bienvenida **no** incluye la contraseña provisional en texto plano; sólo muestra la cédula e indica que la contraseña se entrega por canal seguro. Habilitar `EMAIL_INCLUDE_PASSWORD=true` sólo si no existe flujo de establecimiento de contraseña.
 - **Lógica de Certificación Inmediata:** Si `certificar_inmediatamente` es `true`, el servidor de manera transaccional y atómica:
   1. Registra 100% de progreso para todos los módulos asociados al curso en la tabla `progreso`.
   2. Registra un intento aprobado (calificación 100%) en la tabla `examenes`.

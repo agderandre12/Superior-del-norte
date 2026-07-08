@@ -4,6 +4,30 @@ This contract defines the interaction between the Frontend and Backend for the I
 
 ---
 
+## 🛡️ Cross-Cutting Security & Conventions
+
+These rules apply to **every** endpoint in this contract.
+
+- **Base URL:** Configurable. The frontend resolves it from `VITE_API_BASE_URL` (Vite env) — never hardcoded. Default dev URL: `http://localhost:5000/api`.
+- **Content-Type:** `application/json; charset=utf-8` for all JSON responses (set centrally in `server.js`). Binary downloads (`/certificate/download`) return `application/pdf`.
+- **CORS:** Origin allowlist enforced server-side from `ALLOWED_ORIGINS` (comma-separated). Requests from non-listed origins are rejected. Credentials are allowed.
+- **Security headers:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` on all responses.
+- **Request body limit:** `1 MB` (JSON / URL-encoded).
+- **Rate limiting (in-memory, per IP):**
+  | Endpoint group | Window | Max | HTTP on exceed |
+  |---|---|---|---|
+  | `POST /api/auth/login`, `POST /api/auth/register` | 60 s | 10 | `429` |
+  | `GET /api/certificate/verify/:codigo` | 60 s | 30 | `429` |
+- **Error envelope (standardized):** all errors returned by the centralized error handler use:
+  ```json
+  { "success": false, "error": { "code": "ERROR_CODE", "message": "Human-readable message" } }
+  ```
+  On `5xx` responses in production (`NODE_ENV=production`) the internal `message` is masked and replaced with a generic message; stack traces are **never** sent to clients.
+  > Note: some legacy operational endpoints (auth/login, public verify) still return flatter error shapes (`{ "error": "..." }` or `{ "valido": false, "error": "..." }`) for backward compatibility with deployed clients. These are noted per-endpoint below.
+- **Authentication:** JWT (`HS256`) signed with `JWT_SECRET` (>= 32 chars, configured in `.env`; the server refuses to boot if missing/placeholder). Sent as `Authorization: Bearer <token>`. Tokens expire in **8 hours**.
+
+---
+
 ## 🔒 Authentication
 
 ### 1. User Login
@@ -30,12 +54,16 @@ Authenticates the student using their Cédula (national ID) as the username and 
     }
   }
   ```
-- **Error Response (400 Bad Request / 401 Unauthorized):**
-  ```json
-  {
-    "error": "Cédula o contraseña incorrectas"
-  }
-  ```
+- **Error Response (400 Bad Request / 401 Unauthorized / 429 Too Many Requests):**
+  - 400/401 (legacy flat shape, kept for client compatibility):
+    ```json
+    { "error": "Cédula o contraseña incorrectas" }
+    ```
+  - 429 (rate-limited, standardized envelope):
+    ```json
+    { "success": false, "error": { "code": "RATE_LIMITED", "message": "Demasiadas solicitudes. Intente nuevamente en 60 segundos." } }
+    ```
+    The response includes a `Retry-After: 60` header. Login is rate-limited to **10 attempts/minute/IP** to mitigate brute-force / credential-stuffing.
 
 ---
 
@@ -187,14 +215,18 @@ Generates and streams the PDF certificate for approved students.
   ```
 
 ### 9. Verify Certificate (Public Route)
-Allows anyone to verify the authenticity of a certificate using its verification code. Does not require authentication.
+Allows anyone — including unauthenticated third parties such as employers or health authorities — to verify the authenticity of a diploma using its verification code. Does **not** require authentication.
 
 - **Endpoint:** `GET /api/certificate/verify/:codigo`
+- **Auth:** None (public).
+- **Path param:** `codigo` — the verification code, format `ALIM-XXXX-XXXX` (regex `^[A-Za-z0-9]{3,5}-[A-Za-z0-9]{3,6}-[A-Za-z0-9]{3,6}$`, max 50 chars). The client should `encodeURIComponent` the value.
+- **Rate limiting:** **30 requests/minute/IP** to prevent enumeration of codes. Exceeding returns `429`.
 - **Success Response (200 OK):**
   ```json
   {
     "valido": true,
     "usuario": "Juan Pérez",
+    "nombre_completo": "Juan Pérez",
     "cedula": "123456789",
     "fecha_emision": "2026-06-12",
     "codigo_verificacion": "ALIM-ABCD-1234",
@@ -203,13 +235,23 @@ Allows anyone to verify the authenticity of a certificate using its verification
     "numero_certificado": "AS-2026-0001"
   }
   ```
-- **Error Response (404 Not Found):**
-  ```json
-  {
-    "valido": false,
-    "error": "Código de verificación no válido o certificado inexistente"
-  }
-  ```
+  > Both `usuario` and `nombre_completo` are returned (same value) for compatibility with the two frontend consumers (`HomePage` reads `nombre_completo`; `VerifyCertificate` reads `usuario` with a `nombre_completo` fallback). No internal/non-public certificate columns are exposed.
+- **Error Responses:**
+  - `400 Bad Request` — code missing or over 50 chars:
+    ```json
+    { "valido": false, "error": "Formato de código de verificación inválido." }
+    ```
+  - `400 Bad Request` — code does not match the expected format:
+    ```json
+    { "valido": false, "error": "El código de verificación no cumple con el formato esperado." }
+    ```
+  - `404 Not Found` — format valid but no matching certificate:
+    ```json
+    { "valido": false, "error": "Código de verificación no válido o certificado inexistente." }
+    ```
+  - `429 Too Many Requests` — rate limit exceeded (includes `Retry-After` header).
+
+> **Frontend states (required):** the consuming UI must explicitly handle **loading** (spinner while awaiting response), **success** (render the returned fields — never invent values), and **error/empty** (the 404 message above). The frontend must not fall back to hardcoded placeholder values (e.g. `|| 100`, `|| 'AS-2026-0001'`) since that would fabricate plausible-looking but fake data on a verification screen.
 
 ---
 
@@ -371,5 +413,49 @@ Updates the profile information of a student, including name, document details, 
     "message": "Perfil del estudiante actualizado con éxito."
   }
   ```
+
+---
+
+## 📋 Additional Endpoints (Reference)
+
+These endpoints exist in the backend and are consumed by the frontend but were not detailed above.
+
+### 16. Self-Register
+- **Endpoint:** `POST /api/auth/register`
+- **Auth:** None. Rate-limited (10/min/IP).
+- **Request Body:** `{ "cedula": "...", "nombre_completo": "...", "password": "..." }`
+- **Validation:** `cedula` must be 6–12 digits; `password` must be >= 8 chars with at least one letter and one number.
+- **Success (201):** `{ "message": "Usuario registrado con éxito", "user": { cedula, nombre_completo, rol: "estudiante" } }`
+- > Note: creates the account only — does **not** enroll in any course or issue certificates.
+
+### 17. List Enrolled Courses (Student)
+- **Endpoint:** `GET /api/student/courses`
+- **Auth:** `Bearer <token>` (student).
+- **Success (200):** array of courses with `progreso_porcentaje` and `fecha_matricula` (see `api_docs.md` §B).
+
+### 18. List Courses (Admin, simplified)
+- **Endpoint:** `GET /api/admin/courses/list`
+- **Auth:** `Bearer <token>` (admin).
+- **Success (200):** `[ { "id": 1, "titulo": "Manipulación de Alimentos" }, ... ]`
+
+### 19. Financial Metrics
+- **Endpoint:** `GET /api/admin/financial-metrics`
+- **Auth:** `Bearer <token>` — **restricted to `rol: ingeniero_software` only** (enforced server-side; `administrador` receives `403`).
+- **Success (200):** aggregate revenue + paid enrollments. Returns PII (cedula/name) — intended for internal audit only.
+
+---
+
+## 🔐 Environment Variables (Backend `.env`)
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Server port (default 5000). |
+| `NODE_ENV` | `production` masks 5xx error details. |
+| `JWT_SECRET` | JWT signing key — **required**, >= 32 chars (64 recommended). Server aborts on placeholder/missing. |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowlist. |
+| `TRUST_PROXY_HOPS` | `trust proxy` value for `req.ip`/rate-limiting behind a load balancer. |
+| `FRONTEND_URL` | Base URL used in email/PDF links. |
+| `SMTP_*` | Transactional email config (host/port/secure/user/pass/from). |
+| `EMAIL_INCLUDE_PASSWORD` | `true` to embed the provisional password in the welcome email (default `false` — disabled for security). |
 
 

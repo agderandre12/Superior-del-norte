@@ -42,6 +42,15 @@ const additionalCourses = [
     imagen_url: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80',
     creado_en: '2026-06-17',
     precio: 110000
+  },
+  {
+    id: 107,
+    titulo: 'Bachiller Académico',
+    descripcion: 'Curso especial enfocado únicamente en la obtención de la certificación de Bachiller Académico.',
+    imagen_url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80',
+    creado_en: '2026-07-06',
+    precio: 200000,
+    certificacion_directa: 1
   }
 ];
 
@@ -947,6 +956,78 @@ const additionalModules = [
   <li><strong>Desconexión Laboral:</strong> Al terminar tu jornada de trabajo, realiza actividades recreativas y desconéctate completamente de los correos y chats de servicio.</li>
 </ul>`
     })
+  },
+  // ==========================================
+  // BACHILLER ACADÉMICO (Curso ID: 107, Módulos 701-704)
+  // ==========================================
+  {
+    id: 701,
+    curso_id: 107,
+    titulo_modulo: 'Módulo 1: Inducción Institucional y Proyecto de Vida',
+    orden: 1,
+    tipo_contenido: 'texto',
+    data_contenido: JSON.stringify({
+      url: '',
+      text: `<h3>Bienvenidos al Instituto Superior del Norte</h3>
+<p>El programa de Bachillerato Académico tiene como propósito fundamental formarte en competencias básicas y ciudadanas que te permitan proyectar tu futuro personal y profesional.</p>
+<h4>Mapa de Ruta Formativa:</h4>
+<ul>
+  <li><strong>Módulo 1:</strong> Inducción Institucional y Proyecto de Vida</li>
+  <li><strong>Módulo 2:</strong> Competencias Ciudadanas y Ética</li>
+  <li><strong>Módulo 3:</strong> Metodología de Autoaprendizaje y Nuevas Tecnologías</li>
+  <li><strong>Módulo 4:</strong> Requisitos y Protocolo de Grado</li>
+</ul>`
+    })
+  },
+  {
+    id: 702,
+    curso_id: 107,
+    titulo_modulo: 'Módulo 2: Competencias Ciudadanas y Ética',
+    orden: 2,
+    tipo_contenido: 'texto',
+    data_contenido: JSON.stringify({
+      url: '',
+      text: `<h3>Formación Ciudadana y Ética</h3>
+<p>El ejercicio responsable de la ciudadanía y la vivencia de principios éticos son la base para construir una sociedad justa y en paz en nuestro país.</p>
+<h4>Valores Institucionales:</h4>
+<ul>
+  <li><strong>Respeto:</strong> Valoración de la diversidad y dignidad humana.</li>
+  <li><strong>Responsabilidad:</strong> Compromiso ético con las propias acciones y deberes académicos.</li>
+  <li><strong>Excelencia:</strong> Búsqueda constante del mejoramiento personal y social.</li>
+</ul>`
+    })
+  },
+  {
+    id: 703,
+    curso_id: 107,
+    titulo_modulo: 'Módulo 3: Metodología de Autoaprendizaje y Nuevas Tecnologías',
+    orden: 3,
+    tipo_contenido: 'texto',
+    data_contenido: JSON.stringify({
+      url: '',
+      text: `<h3>El Aprendizaje Autónomo y las TIC</h3>
+<p>El autoaprendizaje te empodera como gestor de tu propia formación, apoyado en el uso constructivo de las Tecnologías de la Información y la Comunicación (TIC).</p>
+<h4>Recomendaciones para el Aprendizaje Autónomo:</h4>
+<ul>
+  <li>Establece un horario diario de estudio independiente.</li>
+  <li>Utiliza herramientas tecnológicas para investigar y enriquecer tus conocimientos.</li>
+  <li>Desarrolla el pensamiento crítico cuestionando la validez de las fuentes de información.</li>
+</ul>`
+    })
+  },
+  {
+    id: 704,
+    curso_id: 107,
+    titulo_modulo: 'Módulo 4: Requisitos y Protocolo de Grado',
+    orden: 4,
+    tipo_contenido: 'texto',
+    data_contenido: JSON.stringify({
+      url: '',
+      text: `<h3>Camino a la Graduación</h3>
+<p>Para culminar con éxito el programa y obtener tu título oficial de Bachiller Académico, debes cumplir con todos los requisitos académicos establecidos.</p>
+<h4>Documentos de Graduación:</h4>
+<p>Una vez aprobado el curso y validada tu carpeta académica, el sistema habilitará automáticamente la descarga de tu <strong>Diploma de Bachiller</strong> y de tu <strong>Acta de Grado</strong>.</p>`
+    })
   }
 ];
 
@@ -1450,6 +1531,69 @@ const additionalQuestions = [
       "D": "Ignorar los problemas de los clientes y no registrar las PQRS"
     },
     respuesta_correcta: "B"
+  },
+  // ==========================================
+  // BACHILLER ACADÉMICO (Curso ID: 107, Preguntas 701-705)
+  // ==========================================
+  {
+    id: 701,
+    curso_id: 107,
+    pregunta: "¿Cuál es un valor fundamental del Instituto Superior del Norte?",
+    opciones: {
+      "A": "Competitividad desmedida",
+      "B": "Excelencia y compromiso social",
+      "C": "Lucro individual",
+      "D": "Indiferencia ante la sociedad"
+    },
+    respuesta_correcta: "B"
+  },
+  {
+    id: 702,
+    curso_id: 107,
+    pregunta: "¿Qué busca el Proyecto Educativo Institucional (PEI)?",
+    opciones: {
+      "A": "Formar únicamente en habilidades técnicas",
+      "B": "Formar integralmente a los estudiantes bajo principios y valores",
+      "C": "Limitar el acceso de los alumnos a las tecnologías",
+      "D": "Organizar eventos netamente deportivos"
+    },
+    respuesta_correcta: "B"
+  },
+  {
+    id: 703,
+    curso_id: 107,
+    pregunta: "¿En qué consiste el principio de autoaprendizaje?",
+    opciones: {
+      "A": "Esperar a que el tutor haga todo el trabajo",
+      "B": "Asumir la responsabilidad del propio proceso de formación y estudio autónomo",
+      "C": "Aprobar los exámenes sin leer ningún contenido",
+      "D": "Estudiar únicamente en grupo sin responsabilidad personal"
+    },
+    respuesta_correcta: "B"
+  },
+  {
+    id: 704,
+    curso_id: 107,
+    pregunta: "¿Cuál de los siguientes es un deber del graduando?",
+    opciones: {
+      "A": "Incumplir con el temario obligatorio",
+      "B": "Cumplir con todos los requisitos académicos y administrativos establecidos",
+      "C": "Delegar su examen final a un tercero",
+      "D": "Retirarse del programa antes de finalizar"
+    },
+    respuesta_correcta: "B"
+  },
+  {
+    id: 705,
+    curso_id: 107,
+    pregunta: "¿Qué ciudad es la sede oficial de emisión de los títulos académicos del Instituto?",
+    opciones: {
+      "A": "Bogotá, Colombia",
+      "B": "Cali, Colombia",
+      "C": "Medellín, Colombia",
+      "D": "Barranquilla, Colombia"
+    },
+    respuesta_correcta: "C"
   }
 ];
 

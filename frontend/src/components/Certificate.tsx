@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import logoNorte from '../assets/logo_instituto_norte.png';
 import { Download, ArrowLeft, CheckCircle, ExternalLink, Check, Copy } from 'lucide-react';
+import { sanitizeHtml } from '../utils/sanitize';
+import BachillerCertificate from './BachillerCertificate';
 
 
 const decodeMojibake = (str: string | undefined): string | undefined => {
@@ -28,13 +30,20 @@ const decodeMojibake = (str: string | undefined): string | undefined => {
 };
 
 const Certificate = () => {
-  const { user, downloadCertificate, token, API_BASE_URL, activeCourseId, studentCourses } = useContext(AppContext);
+  const { user, downloadCertificate, downloadActa, token, API_BASE_URL, activeCourseId, studentCourses } = useContext(AppContext);
   const navigate = useNavigate();
   const [certData, setCertData] = useState(null);
   const [copied, setCopied] = useState(false);
 
   const currentCourse = studentCourses.find(c => c.id === activeCourseId);
   const courseTitle = currentCourse ? currentCourse.titulo : 'Curso de Manipulación Higiénica de Alimentos';
+
+  // Cinematic asymmetric-split (65/35) view for the Bachiller Académico course,
+  // which is flagged with `certificacion_directa` in the database. All other
+  // courses render the standard institutional certificate layout below.
+  if (currentCourse?.certificacion_directa === 1) {
+    return <BachillerCertificate courseTitle={courseTitle} />;
+  }
 
   // Fetch certificate metadata from `/api/certificate/detail`
   useEffect(() => {
@@ -125,21 +134,42 @@ const Certificate = () => {
               {courseTitle}
             </p>
           </div>
-          <button
-            className="btn btn-primary"
-            onClick={certData?.certificado_template ? () => window.print() : downloadCertificate}
-            style={{ height: '46px', borderRadius: '9999px' }}
-          >
-            <Download size={18} />
-            <span>{certData?.certificado_template ? 'Imprimir / Guardar PDF' : 'Descargar PDF Oficial'}</span>
-          </button>
+          {currentCourse?.certificacion_directa === 1 ? (
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className="btn btn-primary"
+                onClick={downloadCertificate}
+                style={{ height: '46px', borderRadius: '9999px', fontWeight: 700 }}
+              >
+                <Download size={18} />
+                <span>Descargar Diploma</span>
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={downloadActa}
+                style={{ height: '46px', borderRadius: '9999px', fontWeight: 700 }}
+              >
+                <Download size={18} />
+                <span>Descargar Acta de Grado</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={certData?.certificado_template ? () => window.print() : downloadCertificate}
+              style={{ height: '46px', borderRadius: '9999px' }}
+            >
+              <Download size={18} />
+              <span>{certData?.certificado_template ? 'Imprimir / Guardar PDF' : 'Descargar PDF Oficial'}</span>
+            </button>
+          )}
         </div>
 
-        {/* Certificate Preview Card */}
+        {/* Certificate Preview Card — sanitized to prevent stored XSS via admin template */}
         {certData?.certificado_template ? (
           <div
             id="print-certificate-area"
-            dangerouslySetInnerHTML={{ __html: certData.certificado_template }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(certData.certificado_template) }}
             style={{
               position: 'relative',
               overflow: 'hidden',

@@ -109,12 +109,12 @@ export default function HomePage() {
   // Verification states
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [verifyResult, setVerifyResult] = useState(null);
-  const [verifyError, setVerifyError] = useState(null);
+  const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const handleVerify = async (e) => {
     e.preventDefault();
-    const code = verificationCode.trim();
+    const code = verificationCode.trim().toUpperCase();
     if (!code) return;
 
     setLoading(true);
@@ -122,14 +122,30 @@ export default function HomePage() {
     setVerifyResult(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/certificate/verify/${code}`);
-      const data = await response.json();
+      // encodeURIComponent guards against codes that contain reserved path
+      // characters which would otherwise break the request or be mis-parsed.
+      const response = await fetch(`${API_BASE_URL}/certificate/verify/${encodeURIComponent(code)}`);
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Código de certificado no válido');
+        const msg =
+          data?.error?.message ||
+          data?.error ||
+          (response.status === 404
+            ? 'No se encontró ningún diploma con ese código en el registro oficial.'
+            : response.status === 429
+            ? 'Demasiadas consultas. Espere unos segundos e intente nuevamente.'
+            : 'Código de certificado no válido.');
+        throw new Error(msg);
       }
-      setVerifyResult(data);
+      // The public verify endpoint returns the payload at the top level; the
+      // `?? data` fallback tolerates a future `{ success, data }` envelope.
+      const payload = data?.data ?? data;
+      if (!payload || payload.valido === false) {
+        throw new Error(payload?.error?.message || payload?.error || 'Diploma no encontrado en el registro oficial.');
+      }
+      setVerifyResult(payload);
     } catch (err) {
-      setVerifyError(err.message || 'Código de verificación no encontrado en el registro oficial');
+      setVerifyError(err?.message || 'Código de verificación no encontrado en el registro oficial');
     } finally {
       setLoading(false);
     }
@@ -457,7 +473,7 @@ export default function HomePage() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '4px 16px', fontSize: '0.9rem' }}>
                     <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Estudiante:</span>
-                    <span className="font-serif" style={{ fontWeight: 800 }}>{verifyResult.nombre_completo}</span>
+                    <span className="font-serif" style={{ fontWeight: 800 }}>{verifyResult.nombre_completo || verifyResult.usuario}</span>
 
                     <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Identificación:</span>
                     <span className="font-sans-mono">{verifyResult.cedula}</span>

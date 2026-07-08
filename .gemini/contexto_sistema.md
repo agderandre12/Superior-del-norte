@@ -35,17 +35,18 @@ Para casos especiales o matriculas que ya cuenten con validaciones comerciales e
 
 ---
 
-## 3. Estado Actual del Proyecto (Junio 2026)
+## 3. Estado Actual del Proyecto (Julio 2026)
 
 ### Backend (`/backend`)
 - **Stack:** Node.js + Express.
 - **Arquitectura:** Capas separadas — `routes/`, `controllers/`, `services/`, `repositories/`. El servidor `server.js` solo configura Express y registra los routers.
 - **Base de Datos:** SQLite3 (`database.sqlite`) con fallback JSON. Tablas: `usuarios`, `cursos`, `matriculas`, `modulos`, `progreso`, `examenes`, `certificados`, `preguntas`.
-- **Autenticación:** JWT firmado con `jsonwebtoken`. Tres roles soportados: `estudiante`, `administrador` y `ingeniero_software`. Los dos últimos son roles privilegiados (`ADMIN_ROLES`) aceptados por el middleware `requireAdmin`; `ingeniero_software` además es el único autorizado para `/api/admin/financial-metrics`. La lista canónica de roles privilegiados vive en `middleware/auth.js` (backend) y en `context/AppContext.tsx` (frontend, `ADMIN_ROLES`/`isAdmin`).
+- **Autenticación:** JWT firmado con `jsonwebtoken`. Tres roles soportados: `estudiante`, `administrador` y `ingeniero_software`. Los dos últimos son roles privilegiados (`ADMIN_ROLES`) aceptados por el middleware `requireAdmin`; `ingeniero_software` además es el único autorizado para `/api/admin/financial-metrics`. La lista canónica de roles privilegiados vive en `middleware/auth.js` (backend) y en `context/AppContext.tsx` (frontend, `ADMIN_ROLES`/`isAdmin`). El `JWT_SECRET` debe configurarse en `.env` con >= 32 caracteres; el servidor **se niega a arrancar** si falta o es un placeholder. Tokens expiran en 8h.
+- **Hardening de Seguridad (Julio 2026):** CORS con allowlist de orígenes (`ALLOWED_ORIGINS`), headers de seguridad (`nosniff`, `DENY`, `no-referrer`), límite de body 1MB, `trust proxy`, rate-limiting en `/auth/login`, `/auth/register` (10/min) y `/certificate/verify` (30/min), error handler centralizado que **enmascara** mensajes 5xx en producción, y cese del envío de contraseña en texto plano por email (gate `EMAIL_INCLUDE_PASSWORD`, default off).
 - **Generación PDF:** `pdfkit` en `src/services/pdfService.js`. Orientación horizontal, logotipo, firma del Comité. URL de verificación configurable vía `FRONTEND_URL` en `.env`.
 - **Contenido:** El curso de Manipulación de Alimentos tiene **8 módulos** sembrados en DB con contenido HTML estructurado (migrado desde `Información curso de manipulación.txt`). Nuevos cursos pueden tener cualquier número de módulos.
 - **Examen:** Las preguntas están en la tabla `preguntas` en BD. El endpoint `GET /api/exam/questions?courseId=X` filtra `respuesta_correcta`. La calificación se hace consultando la BD con `getExamQuestionsWithAnswers()`.
-- **Notificaciones Email:** `src/services/emailService.js` usa Nodemailer. En desarrollo (sin SMTP configurado), usa Ethereal Email y muestra el URL de previsualización en consola.
+- **Notificaciones Email:** `src/services/emailService.js` usa Nodemailer. En desarrollo (sin SMTP configurado), usa Ethereal Email y muestra el URL de previsualización en consola. El destinatario usa la columna `email` de `usuarios`; si es `NULL`, deriva `${cedula}@institutosuperiordelnorte-student.co`.
 - **Endpoints Clave:**
   - `POST /api/auth/login` — JWT para estudiante y admin.
   - `GET /api/student/courses` — Cursos matriculados del estudiante.
@@ -60,7 +61,8 @@ Para casos especiales o matriculas que ya cuenten con validaciones comerciales e
   - `GET/POST /api/admin/*` — Métricas, CRUD de estudiantes (con email bienvenida), matrícula, creación de cursos.
 
 ### Frontend (`/frontend`)
-- **Stack:** React 19 + Vite 8.
+- **Stack:** React 19 + Vite 8 + TypeScript.
+- **Hardening de Seguridad (Julio 2026):** el `API_BASE_URL` se resuelve desde `VITE_API_BASE_URL` (variable de entorno Vite) en lugar de estar hardcoded. `index.html` referencia `/src/main.tsx`. El HTML administrativo (plantillas de certificado y contenido de módulos) se sanea con **DOMPurify** (`utils/sanitize.ts`) antes de inyectarse vía `dangerouslySetInnerHTML`, mitigando XSS almacenado y la cadena de robo de JWT desde `localStorage`. Se eliminaron los banners de credenciales-demo de las pantallas de login.
 - **Enrutamiento:** React Router DOM (`HashRouter`). Las rutas declarativas son la fuente de verdad de la navegación.
   - `/login`, `/admin/login` — Autenticación.
   - `/dashboard` — Vista del estudiante con la lista de cursos matriculados.
@@ -69,7 +71,7 @@ Para casos especiales o matriculas que ya cuenten con validaciones comerciales e
   - `/course/:courseId/exam` — Examen final.
   - `/certificate/:courseId` — Vista del diploma.
   - `/admin/dashboard`, `/admin/create-course` — Panel administrativo.
-  - `/verify`, `/verify/:code` — Verificación pública de certificados.
+  - `/verify`, `/verify/:code` — Verificación pública de certificados (portal público: el botón "Volver" regresa a `/`, no a `/login`).
 - **Estado Global:** `AppContext.jsx` (Context API). Centraliza autenticación, cursos del estudiante, módulos, progreso, examen y operaciones de admin.
 - **Inicialización de Estado:** El `user` y `currentView` se inicializan sincrónicamente con lazy `useState` (decodificando el JWT del `localStorage`). **No hay `useEffect` de re-decodificación JWT** para evitar loops de renderizado.
 - **Fetch Functions:** Estabilizadas con `useCallback` para que sus referencias no cambien en cada render.
@@ -117,9 +119,17 @@ Para casos especiales o matriculas que ya cuenten con validaciones comerciales e
 
 > [!WARNING]
 > **Brechas Conocidas:**
-> 1. **Matrícula Solo Manual:** No existe flujo de auto-registro comercial. Los estudiantes solo se crean desde el panel del admin. El endpoint `POST /api/auth/register` existe pero sólo crea la cuenta sin matricular ni certificar.
+> 1. **Matrícula Solo Manual:** No existe flujo de auto-registro comercial. Los estudiantes solo se crean desde el panel del admin. El endpoint `POST /api/auth/register` existe pero sólo crea la cuenta sin matricular ni certificar (valida cédula 6–12 dígitos y contraseña >= 8 chars con letra+número).
 > 2. **Mojibake Residual:** Los correctores `decodeMojibake` en frontend y `normalizeToUtf8` en backend son parches. La causa raíz es la codificación de la conexión SQLite. Requiere configurar `pragma encoding = 'UTF-8'` y retirar los helpers progresivamente.
 > 3. **Cooldown de Examen:** Implementado (10 min / 3 fallos), pero sin feedback visual del tiempo restante en el frontend.
-> 4. **Email de estudiante hardcodeado:** `emailService.js` usa `${cedula}@institutosuperiordelnorte-student.co` como destinatario. Para producción se debe agregar campo `email` a la tabla `usuarios` y formulario de registro.
-> 5. **PDF no respeta plantillas HTML personalizadas:** `pdfService.js` siempre genera el layout institucional por defecto. Las plantillas HTML por curso (`certificado_template`) sólo se renderizan en pantalla (vía `Certificate.jsx`), no en el PDF descargable/empleado.
-> 6. **Validación de códigos de verificación débil:** El endpoint público `/api/certificate/verify/:codigo` usa valores fallback hardcodeados (`|| 100`, `|| 'AS-2026-0001'`) que pueden enmascarar problemas de integridad de datos. No hay validación de formato ni rate limiting en el endpoint público.
+> 4. **PDF no respeta plantillas HTML personalizadas:** `pdfService.js` siempre genera el layout institucional por defecto. Las plantillas HTML por curso (`certificado_template`) sólo se renderizan en pantalla (vía `Certificate.tsx`, saneadas con DOMPurify), no en el PDF descargable/empleado.
+> 5. **Verificación IDOR de matrícula (P0 pendiente):** los endpoints de estudiante (`/api/course/*`, `/api/exam/*`, `/api/certificate/*`) confían en `?courseId=` sin verificar que el estudiante esté matriculado en ese curso. Cualquier estudiante autenticado podría leer contenido/exámenes de cursos ajenos. Mitigación recomendada: middleware `requireEnrollment` que valide la fila en `matriculas`.
+> 6. **Almacenamiento de JWT en `localStorage`:** expone el token a XSS. DOMPurify mitiga el vector activo, pero la mitigación definitiva es mover el JWT a una cookie `HttpOnly; Secure; SameSite=Strict`.
+
+> [!NOTE]
+> **Resueltas en la auditoría de Julio 2026 (ya NO son brechas):**
+> - ~~Email de estudiante hardcodeado~~ → la columna `email` existe en `usuarios` y se usa en `emailService.js`.
+> - ~~Validación de códigos de verificación débil~~ → el endpoint público `/api/certificate/verify/:codigo` ahora valida formato (regex), limita a 50 chars, tiene rate-limiting (30/min), y el frontend ya no usa valores fallback falsos (`|| 100`, `|| 'AS-2026-0001'`).
+> - ~~Contraseña en texto plano por email~~ → deshabilitado por defecto (gate `EMAIL_INCLUDE_PASSWORD`).
+> - ~~Secreto JWT fallback hardcoded~~ → el servidor se niega a arrancar sin un `JWT_SECRET` fuerte.
+> - ~~Backdoor de reseteo de contraseña del ingeniero en cada arranque~~ → eliminado.

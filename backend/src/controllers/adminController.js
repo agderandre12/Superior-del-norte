@@ -3,6 +3,7 @@ const { normalizeToUtf8 } = require('../middleware/auth');
 const { sendWelcomeEmail, sendCertificateEmail } = require('../services/emailService');
 const { generateCertificatePDF } = require('../services/pdfService');
 const { interpolateTemplate } = require('../services/certificateTemplateService');
+const academicTemplateService = require('../services/academicTemplateService');
 
 async function getCourses(req, res, next) {
   try {
@@ -211,11 +212,14 @@ async function createStudent(req, res, next) {
       });
     }
 
-    // Always send welcome email with credentials (fire-and-forget)
+    // Welcome email (fire-and-forget). Note: the plaintext password is only
+    // embedded when EMAIL_INCLUDE_PASSWORD=true is set on the server; by default
+    // the email references the cédula only and the password is delivered via a
+    // secure channel. See emailService.sendWelcomeEmail.
     sendWelcomeEmail({
       cedula,
       nombre_completo: cleanNombre,
-      password, // Contraseña en texto plano antes de hashear (solo para el email)
+      password: process.env.EMAIL_INCLUDE_PASSWORD ? password : undefined,
       cursos,
       email: cleanEmail
     }).catch((emailErr) => {
@@ -289,9 +293,14 @@ async function downloadStudentCertificate(req, res, next) {
     const course = courses.find(c => c.id === courseId);
     const courseTitle = course ? course.titulo : 'Manipulación de Alimentos';
 
-    const htmlTemplate = course && course.certificado_template
-      ? interpolateTemplate(course.certificado_template, student, cert, course)
-      : null;
+    let htmlTemplate = null;
+    if (course && course.certificacion_directa === 1) {
+      htmlTemplate = academicTemplateService.generateDiplomaTemplate(student, cert, course);
+    } else {
+      htmlTemplate = course && course.certificado_template
+        ? interpolateTemplate(course.certificado_template, student, cert, course)
+        : null;
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Certificado_${courseTitle.replace(/\s+/g, '_')}_${cedula}.pdf`);
@@ -307,6 +316,43 @@ async function downloadStudentCertificate(req, res, next) {
     };
 
     await generateCertificatePDF(res, pdfData, htmlTemplate);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function downloadStudentActa(req, res, next) {
+  try {
+    const { cedula } = req.query;
+    const courseId = parseInt(req.query.courseId);
+
+    if (!cedula || !courseId) {
+      return res.status(400).json({ error: 'La cédula y el id del curso son requeridos.' });
+    }
+
+    const student = await db.getUser(cedula);
+    if (!student) {
+      return res.status(404).json({ error: 'El estudiante no existe.' });
+    }
+
+    const cert = await db.getCertificateByCedula(cedula, courseId);
+    if (!cert) {
+      return res.status(404).json({ error: 'El estudiante no cuenta con un acta de grado para este curso.' });
+    }
+
+    const courses = await db.getCourses();
+    const course = courses.find(c => c.id === courseId);
+    if (!course || course.certificacion_directa !== 1) {
+      return res.status(400).json({ error: 'Este curso no cuenta con acta de grado.' });
+    }
+
+    const courseTitle = course.titulo;
+    const htmlTemplate = academicTemplateService.generateActaTemplate(student, cert, course);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Acta_de_Grado_${courseTitle.replace(/\s+/g, '_')}_${cedula}.pdf`);
+
+    await generateCertificatePDF(res, {}, htmlTemplate);
   } catch (err) {
     next(err);
   }
@@ -486,6 +532,7 @@ module.exports = {
   createStudent,
   updateStudentCourses,
   downloadStudentCertificate,
+  downloadStudentActa,
   updateCourse,
   updateCourseModule,
   updateStudentProfile,

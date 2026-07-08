@@ -167,21 +167,6 @@ const AdminLogin = () => {
             </button>
           </div>
 
-          {/* Seed Credentials Admin */}
-          <div style={{
-            marginTop: '24px',
-            padding: '14px',
-            borderRadius: '16px',
-            background: 'var(--isn-bg-light)',
-            fontSize: '0.75rem',
-            color: 'var(--isn-charcoal)',
-            textAlign: 'center'
-          }}>
-            <p style={{ fontWeight: 700, color: 'var(--isn-blue-dark)', marginBottom: '6px' }}>🔑 Credenciales de Administrador</p>
-            <p style={{ marginBottom: '4px' }}>Cédula: <code style={{ color: 'var(--isn-blue-dark)', background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>999999999</code></p>
-            <p>Contraseña: <code style={{ color: 'var(--isn-blue-dark)', background: '#E2E8F0', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>adminpassword</code></p>
-          </div>
-
         </div>
       </div>
     </div>

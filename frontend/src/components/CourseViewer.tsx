@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { Play, Pause, ChevronLeft, ChevronRight, CheckCircle2, Award, ArrowLeft, Volume2, Film, Image as ImageIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { sanitizeHtml } from '../utils/sanitize';
 
 const CourseViewer = () => {
   const {
@@ -258,7 +259,7 @@ const CourseViewer = () => {
           style={{ lineHeight: '1.8', fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '32px' }}
         >
           {/<\/?[a-z][\s\S]*>/i.test(currentModule.contenido || '') ? (
-            <div dangerouslySetInnerHTML={{ __html: currentModule.contenido }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(currentModule.contenido) }} />
           ) : (
             <ReactMarkdown>{currentModule.contenido}</ReactMarkdown>
           )}

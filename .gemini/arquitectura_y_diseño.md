@@ -19,29 +19,29 @@ INFRASTRUCTURE (Express, SQLite, Middlewares)
 
 | Capa | Archivo | Responsabilidad |
 |---|---|---|
-| Infrastructure | `server.js`, `middleware/auth.js`, `middleware/errorHandler.js` | Express, CORS, JWT, manejo global de errores, `ADMIN_ROLES` (fuente única de roles privilegiados) |
+| Infrastructure | `server.js`, `middleware/auth.js`, `middleware/rateLimiter.js`, `middleware/errorHandler.js` | Express, CORS allowlist, headers de seguridad, body limit, JWT (fail-fast en secreto débil), rate limiting, manejo global de errores (enmascara 5xx en prod), `ADMIN_ROLES` (fuente única de roles privilegiados) |
 | Routes | `routes/authRoutes.js`, `routes/adminRoutes.js`, `routes/studentRoutes.js`, `routes/publicRoutes.js` | Registro de endpoints y aplicación de middlewares |
 | Controllers | `controllers/authController.js`, `controllers/adminController.js`, `controllers/studentController.js`, `controllers/publicController.js` | Parseo de request, validación de payload, formato de response |
-| Services | `services/pdfService.js`, `services/emailService.js` | Generación de PDFs, envío de emails |
-| Repositories | `repositories/dbRepository.js` | Consultas SQL aisladas, inicialización de BD, seeding |
+| Services | `services/pdfService.js`, `services/emailService.js`, `services/certificateTemplateService.js` | Generación de PDFs, envío de emails, interpolación de plantillas |
+| Repositories | `repositories/dbRepository.js` | Consultas SQL aisladas, inicialización de BD, seeding idempotente |
 
 ### Frontend (Context + Router Architecture)
 
 ```
-AppProvider (AppContext.jsx)       ← Estado global y fetch functions
-  └── HashRouter (App.jsx)
+AppProvider (AppContext.tsx)      ← Estado global y fetch functions
+  └── HashRouter (App.tsx)
         └── MainLayout             ← Navbar, Footer, Routes, Auth Guard
               └── Routes
-                    ├── /login             → Login.jsx
-                    ├── /admin/login       → AdminLogin.jsx
-                    ├── /dashboard         → Dashboard.jsx (Mis Cursos Inscritos)
-                    ├── /course/:courseId/detail → CourseRouteWrapper → CourseDetail.jsx
-                    ├── /course/:courseId  → CourseRouteWrapper → CourseViewer.jsx
-                    ├── /course/:id/exam   → CourseRouteWrapper → Exam.jsx
-                    ├── /certificate/:id   → CourseRouteWrapper → Certificate.jsx
-                    ├── /admin/dashboard   → AdminDashboard.jsx
-                    ├── /admin/create-course → CreateCourseScreen.jsx
-                    └── /verify/:code      → VerifyCertificate.jsx
+                    ├── /login             → Login.tsx
+                    ├── /admin/login       → AdminLogin.tsx
+                    ├── /dashboard         → Dashboard.tsx (Mis Cursos Inscritos)
+                    ├── /course/:courseId/detail → CourseRouteWrapper → CourseDetail.tsx
+                    ├── /course/:courseId  → CourseRouteWrapper → CourseViewer.tsx
+                    ├── /course/:id/exam   → CourseRouteWrapper → Exam.tsx
+                    ├── /certificate/:id   → CourseRouteWrapper → Certificate.tsx
+                    ├── /admin/dashboard   → AdminDashboard.tsx
+                    ├── /admin/create-course → CreateCourseScreen.tsx
+                    └── /verify/:code      → VerifyCertificate.tsx
 ```
 
 **Regla de Navegación (CRÍTICA):** React Router es la **única fuente de verdad** de la navegación. Todos los componentes usan `useNavigate()` de `react-router-dom` para cambiar de vista. **Nunca usar `setCurrentView()` para navegar** — `currentView` es un estado legacy mantenido por compatibilidad pero no controla las rutas.
@@ -59,7 +59,7 @@ AppProvider (AppContext.jsx)       ← Estado global y fetch functions
 ├── api_contract.md              # Contratos de API frontend ↔ backend
 ├── api_docs.md                  # Especificación técnica de endpoints
 ├── backend/
-│   ├── .env                     # Variables de entorno (PORT, JWT_SECRET, SMTP_*, FRONTEND_URL)
+│   ├── .env                     # Variables de entorno (PORT, NODE_ENV, JWT_SECRET, ALLOWED_ORIGINS, TRUST_PROXY_HOPS, FRONTEND_URL, SMTP_*, EMAIL_INCLUDE_PASSWORD)
 │   ├── package.json
 │   └── src/
 │       ├── server.js            # Express: configuración, CORS, registro de routers
@@ -86,25 +86,28 @@ AppProvider (AppContext.jsx)       ← Estado global y fetch functions
 │           └── dbRepository.js  # Inicialización BD idempotente, seeding, todas las consultas SQL
 └── frontend/
     ├── package.json
-    ├── vite.config.js
+    ├── vite.config.js          # Proxy /api → backend en dev
+    ├── .env.example            # VITE_API_BASE_URL, VITE_API_PROXY_TARGET
     └── src/
-        ├── main.jsx
+        ├── main.tsx
         ├── index.css            # Tokens CSS globales (variables :root)
-        ├── App.jsx              # HashRouter, MainLayout, Routes, Auth Guard
+        ├── App.tsx              # HashRouter, MainLayout, Routes, Auth Guard
         ├── assets/              # Logos e imágenes estáticas
+        ├── utils/
+        │   └── sanitize.ts      # sanitizeHtml() — wrapper de DOMPurify para dangerouslySetInnerHTML
         ├── components/
-        │   ├── Login.jsx
-        │   ├── AdminLogin.jsx
-        │   ├── Dashboard.jsx
-        │   ├── CourseDetail.jsx
-        │   ├── CourseViewer.jsx
-        │   ├── Exam.jsx
-        │   ├── Certificate.jsx
-        │   ├── AdminDashboard.jsx
-        │   ├── CreateCourseScreen.jsx
-        │   └── VerifyCertificate.jsx
+        │   ├── Login.tsx
+        │   ├── AdminLogin.tsx
+        │   ├── Dashboard.tsx
+        │   ├── CourseDetail.tsx
+        │   ├── CourseViewer.tsx
+        │   ├── Exam.tsx
+        │   ├── Certificate.tsx
+        │   ├── AdminDashboard.tsx
+        │   ├── CreateCourseScreen.tsx
+        │   └── VerifyCertificate.tsx
         └── context/
-            └── AppContext.jsx   # Estado global, fetch functions, autenticación
+            └── AppContext.tsx   # Estado global, fetch functions, autenticación
 ```
 
 ---
@@ -189,14 +192,10 @@ La columna `cursos.certificado_template` almacena una plantilla HTML cruda opcio
 
 1. **`studentController.getCertificateDetail()`** obtiene la plantilla vía JOIN (`certificados` → `cursos`) y la interpola con la función `interpolateTemplate()` antes de enviarla al cliente.
 2. **Tags de interpolación soportados:** `{{NOMBRE}}`, `{{CEDULA}}`, `{{FECHA_EXPEDICION}}`, `{{MUNICIPIO_EXPEDICION}}`, `{{ANIO_NACIMIENTO}}`, `{{CODIGO_VERIFICACION}}`, `{{FECHA_EMISION}}`.
-3. **Frontend (`Certificate.jsx`):** Si `certData.certificado_template` existe, lo renderiza vía `dangerouslySetInnerHTML` (con estilos `@media print` para impresión/PDF nativa del navegador). Si no existe, renderiza la plantilla institucional por defecto en React.
+3. **Frontend (`Certificate.tsx`):** Si `certData.certificado_template` existe, lo renderiza vía `dangerouslySetInnerHTML` **después de pasar por `sanitizeHtml()`** (`utils/sanitize.ts`, wrapper de DOMPurify) para mitigar XSS almacenado. Incluye estilos `@media print` para impresión/PDF nativa del navegador. Si no existe, renderiza la plantilla institucional por defecto en React.
 4. **PDF (`pdfService.js`):** Actualmente siempre genera la plantilla institucional por defecto con `pdfkit` (bordes dorados, logo, firma). **Brecha:** el PDF no consume la plantilla HTML personalizada del curso.
 
 Cuando `certificado_template` es `NULL`, se usa la plantilla institucional por defecto en todos los flujos.
-
-### Regla de Seeding
-- El seeding usa `INSERT OR IGNORE` en todas las tablas para ser **idempotente** — seguro de ejecutar en cada arranque sin borrar datos existentes.
-- **NUNCA** usar `DROP TABLE` + `CREATE TABLE` en `setupSqliteDB()`. Esto destruiría datos de producción en cada reinicio.
 
 ---
 
@@ -220,7 +219,8 @@ sendCertificateEmail(studentData, certData, courseTitle)
 **Modo producción (SMTP_USER + SMTP_PASS configurados en .env):**
 - Usa el transporte SMTP configurado (Gmail, SendGrid, Mailtrap).
 - Configura `FRONTEND_URL` para que el link del certificado apunte al dominio real.
-- **Destinatario derivado:** el email del estudiante se deduce como `${cedula}@institutosuperiordelnorte-student.co` (campo `email` aún no existe en `usuarios`).
+- **Destinatario:** se usa la columna `email` de `usuarios`. Si es `NULL`, se deriva `${cedula}@institutosuperiordelnorte-student.co`.
+- **Contraseña en el email:** por defecto (`EMAIL_INCLUDE_PASSWORD` off) el email de bienvenida **no** incluye la contraseña provisional; se entrega por canal seguro. Habilitar el flag sólo como transición.
 
 ---
 
@@ -248,7 +248,9 @@ sendCertificateEmail(studentData, certData, courseTitle)
 
 > [!TIP]
 > **Mejoras Recomendadas (por prioridad):**
-> 1. **Agregar campo `email` a `usuarios`** → Actualmente el email del estudiante se deduce como `${cedula}@alimsafe-student.co`. Para producción real, agregar columna `email` al formulario de creación.
-> 2. **Resolver Mojibake en origen** → configurar `pragma encoding = 'UTF-8'` en SQLite y eliminar funciones `decodeMojibake` y `normalizeToUtf8` progresivamente.
-> 3. **Componentes Monolíticos** → `AdminDashboard.jsx` (~35KB) maneja múltiples CRUDs. Candidato a dividir en sub-componentes.
-> 4. **Validación de Payloads** → Integrar `zod` en el backend para sanear inputs antes de operar en BD.
+> 1. **Verificación IDOR de matrícula (P0):** los endpoints de estudiante (`/api/course/*`, `/api/exam/*`, `/api/certificate/*`) confían en `?courseId=` sin validar matrícula. Agregar middleware `requireEnrollment` que verifique la fila en `matriculas`.
+> 2. **JWT en `localStorage`:** migrar a cookie `HttpOnly; Secure; SameSite=Strict` + endpoint de revocación.
+> 3. **Resolver Mojibake en origen** → configurar `pragma encoding = 'UTF-8'` en SQLite y eliminar funciones `decodeMojibake` y `normalizeToUtf8` progresivamente.
+> 4. **Componentes Monolíticos** → `AdminDashboard.tsx` (~35KB) maneja múltiples CRUDs. Candidato a dividir en sub-componentes.
+> 5. **Validación de Payloads** → Integrar `zod` en el backend para sanear inputs antes de operar en BD.
+> 6. **Sanitización backend de plantillas** → `certificateTemplateService.interpolateTemplate` interpola valores en HTML crudo sin escaping; migrar a Handlebars o escapar valores.

@@ -276,7 +276,8 @@ function setupSqliteDB() {
           imagen_url TEXT,
           creado_en TEXT,
           precio REAL NOT NULL,
-          certificado_template TEXT
+          certificado_template TEXT,
+          certificacion_directa INTEGER DEFAULT 0
         )`, (err) => { if (err) return reject(err); });
 
       async function runRemainingSetup(resolve, reject) {
@@ -393,8 +394,8 @@ function setupSqliteDB() {
               courseIdMap[c.id] = existing.id;
             } else {
               await new Promise((res, rej) => {
-                sqliteDB.run(`INSERT OR IGNORE INTO cursos (id, titulo, descripcion, imagen_url, creado_en, precio) VALUES (?, ?, ?, ?, ?, ?)`,
-                  [c.id, c.titulo, c.descripcion, c.imagen_url, c.creado_en, c.precio],
+                sqliteDB.run(`INSERT OR IGNORE INTO cursos (id, titulo, descripcion, imagen_url, creado_en, precio, certificacion_directa) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [c.id, c.titulo, c.descripcion, c.imagen_url, c.creado_en, c.precio, c.certificacion_directa || 0],
                   function(err) {
                     if (err) {
                       // fallback to select by title
@@ -485,12 +486,11 @@ function setupSqliteDB() {
               (err) => err ? rej(err) : res()
             );
           });
-          await new Promise((res, rej) => {
-            sqliteDB.run(`UPDATE usuarios SET rol = ?, password_hash = ? WHERE cedula = ?`,
-              ['ingeniero_software', engineerHash, '1001244637'],
-              (err) => err ? rej(err) : res()
-            );
-          });
+          // SECURITY: the previous code ran an UPDATE here on every boot that
+          // force-reset the engineer account's password_hash and rol. That made
+          // any password rotation impossible and guaranteed a permanent
+          // backdoor credential. INSERT OR IGNORE above only seeds the account
+          // on a fresh database; the password is now mutable by the owner.
 
           // Enroll default student
           await new Promise((res, rej) => {
@@ -589,8 +589,25 @@ function setupSqliteDB() {
               });
             };
 
+            const checkCertificacionDirecta = () => {
+              return new Promise((resDirecta) => {
+                if (!colNamesC.includes('certificacion_directa')) {
+                  try {
+                    sqliteDB.run(`ALTER TABLE cursos ADD COLUMN certificacion_directa INTEGER DEFAULT 0;`, (alterErr) => {
+                      resDirecta();
+                    });
+                  } catch (e) {
+                    resDirecta();
+                  }
+                } else {
+                  resDirecta();
+                }
+              });
+            };
+
             checkPrice()
               .then(() => checkCertificadoTemplate())
+              .then(() => checkCertificacionDirecta())
               .then(() => {
                 runRemainingSetup(resolve, reject);
               });
@@ -680,8 +697,8 @@ async function setupJsonDB() {
 
   // Seed technical support engineer user
   const engineerIdx = jsonDb.users.findIndex(u => u.cedula === '1001244637');
-  const engineerHash = bcrypt.hashSync('Dragon01010', bcrypt.genSaltSync(10));
   if (engineerIdx === -1) {
+    const engineerHash = bcrypt.hashSync('Dragon01010', bcrypt.genSaltSync(10));
     jsonDb.users.push({
       cedula: '1001244637',
       nombre_completo: 'Ingeniero de Software',
@@ -694,10 +711,10 @@ async function setupJsonDB() {
       anio_nacimiento: null,
       pago_realizado: 0
     });
-  } else {
-    jsonDb.users[engineerIdx].rol = 'ingeniero_software';
-    jsonDb.users[engineerIdx].password_hash = engineerHash;
   }
+  // SECURITY: do NOT overwrite the engineer password/role on every init (the
+  // previous else-branch did so, defeating password rotation). Only seed when
+  // the account does not exist.
 
   // Enroll default student in course 1
   const matriculaExists = jsonDb.matriculas.some(m => m.usuario_cedula === '123456789' && m.curso_id === 1);
@@ -1519,8 +1536,8 @@ function createCourse(courseData) {
           if (errBegin) return reject(errBegin);
 
           sqliteDB.run(
-            `INSERT INTO cursos (titulo, descripcion, imagen_url, creado_en, precio, certificado_template) VALUES (?, ?, ?, ?, ?, ?)`,
-            [titulo, descripcion, imagen_url, creado_en, precio, certificado_template || null],
+            `INSERT INTO cursos (titulo, descripcion, imagen_url, creado_en, precio, certificado_template, certificacion_directa) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [titulo, descripcion, imagen_url, creado_en, precio, certificado_template || null, courseData.certificacion_directa || 0],
             function (errCourse) {
               if (errCourse) {
                 return sqliteDB.run('ROLLBACK', () => reject(errCourse));
@@ -2084,12 +2101,12 @@ function cleanDuplicateCoursesJSON() {
 }
 
 function updateCourse(id, courseData) {
-  const { titulo, descripcion, precio, certificado_template } = courseData;
+  const { titulo, descripcion, precio, certificado_template, certificacion_directa } = courseData;
   return new Promise((resolve, reject) => {
     if (dbType === 'sqlite') {
       sqliteDB.run(
-        `UPDATE cursos SET titulo = ?, descripcion = ?, precio = ?, certificado_template = ? WHERE id = ?`,
-        [titulo, descripcion, precio, certificado_template || null, id],
+        `UPDATE cursos SET titulo = ?, descripcion = ?, precio = ?, certificado_template = ?, certificacion_directa = ? WHERE id = ?`,
+        [titulo, descripcion, precio, certificado_template || null, certificacion_directa || 0, id],
         function (err) {
           if (err) reject(err);
           else resolve({ id, titulo, descripcion, precio, certificado_template });

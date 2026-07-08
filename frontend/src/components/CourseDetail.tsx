@@ -33,6 +33,7 @@ const CourseDetail = () => {
     setActiveModuleId,
     examStatus,
     downloadCertificate,
+    downloadActa,
     studentCourses,
     activeCourseId
   } = useContext(AppContext);
@@ -392,21 +393,40 @@ const CourseDetail = () => {
               </div>
 
               {hasApprovedExam ? (
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <button
                     onClick={() => navigate(`/certificate/${activeCourseId}`)}
                     className="btn"
-                    style={{ background: '#FFFFFF', color: 'var(--text-primary)', flex: 1, padding: '12px', borderRadius: '9999px' }}
+                    style={{ background: '#FFFFFF', color: 'var(--text-primary)', width: '100%', padding: '12px', borderRadius: '9999px', border: '1px solid #E2E8F0', fontWeight: 700 }}
                   >
-                    Ver Diploma
+                    Ver Certificación y Documentos
                   </button>
-                  <button 
-                    onClick={downloadCertificate}
-                    className="btn" 
-                    style={{ background: 'var(--accent-emerald)', color: '#FFFFFF', flex: 1, padding: '12px', borderRadius: '9999px' }}
-                  >
-                    Descargar PDF
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                    <button 
+                      onClick={downloadCertificate}
+                      className="btn" 
+                      style={{ background: 'var(--isn-blue)', color: '#FFFFFF', flex: 1, padding: '12px', borderRadius: '9999px', fontWeight: 700 }}
+                    >
+                      Diploma
+                    </button>
+                    {displayCourse.certificacion_directa === 1 ? (
+                      <button 
+                        onClick={downloadActa}
+                        className="btn" 
+                        style={{ background: 'var(--accent-emerald)', color: '#FFFFFF', flex: 1, padding: '12px', borderRadius: '9999px', fontWeight: 700 }}
+                      >
+                        Acta de Grado
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={downloadCertificate}
+                        className="btn" 
+                        style={{ background: 'var(--accent-emerald)', color: '#FFFFFF', flex: 1, padding: '12px', borderRadius: '9999px', fontWeight: 700 }}
+                      >
+                        Descargar PDF
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div style={{

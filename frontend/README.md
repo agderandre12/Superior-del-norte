@@ -1,16 +1,48 @@
-# React + Vite
+# Frontend — Instituto Superior del Norte LMS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite + TypeScript single-page app for the food-handling course LMS:
+public landing page, public diploma verification portal, student campus, and
+admin panel.
 
-Currently, two official plugins are available:
+## Scripts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the Vite dev server (HMR) on `http://localhost:5173`. |
+| `npm run build` | Type-check-free production build into `dist/`. |
+| `npm run lint` | ESLint (flat config). |
+| `npm run preview` | Preview the production build locally. |
 
-## React Compiler
+> Type-checking: run `npx tsc --noEmit` before committing — it is **not** part of
+> the build script today.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Environment
 
-## Expanding the ESLint configuration
+Copy `.env.example` to `.env` and adjust:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Variable | Purpose |
+|---|---|
+| `VITE_API_BASE_URL` | Absolute base URL of the backend API (e.g. `https://api.institutosuperiordelnorte.co/api`). Defaults to `http://localhost:5000/api`. **Must** be set at build time for deployment. |
+| `VITE_API_PROXY_TARGET` | Used only by the Vite dev proxy (`vite.config.js`) to forward `/api` to the backend. |
+
+Only variables prefixed with `VITE_` are exposed to the browser bundle — never
+put secrets here.
+
+## Architecture (summary)
+
+- **State:** `src/context/AppContext.tsx` (Context API). Centralizes auth,
+  student courses, modules, progress, exam, and admin operations. The JWT is
+  stored in `localStorage` (see known limitations in `.gemini/` docs).
+- **Routing:** React Router DOM (`HashRouter`) in `src/App.tsx`. Routes are the
+  single source of truth for navigation; `<ProtectedRoute allowRoles={...}>`
+  guards private views.
+- **Public diploma verification:** `src/components/VerifyCertificate.tsx` and the
+  inline form in `HomePage.tsx` both call `GET /api/certificate/verify/:codigo`.
+  The code is `encodeURIComponent`-d; loading / success / empty / error states
+  are all handled explicitly (no fabricated fallback data).
+- **HTML sanitization:** any admin-authored HTML rendered via
+  `dangerouslySetInnerHTML` (certificate templates, module content) is first
+  passed through `sanitizeHtml()` in `src/utils/sanitize.ts` (DOMPurify).
+
+See `.gemini/arquitectura_y_diseño.md` for the full architecture, routing table,
+and database schema.

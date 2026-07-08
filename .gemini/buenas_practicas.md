@@ -139,10 +139,23 @@ await sendWelcomeEmail(studentData);
 ### Aislamiento de Datos por Rol
 - Un `estudiante` solo puede consultar sus propios datos (cédula extraída del JWT en `req.user.cedula`). Cualquier intento de acceso a datos de otro usuario → `HTTP 403`.
 - Contraseñas hasheadas con `bcryptjs` (mínimo 10 saltos). Nunca texto plano en BD.
+- **Política de contraseña:** `POST /api/auth/register` exige mínimo 8 caracteres con al menos una letra y un número (`PASSWORD_POLICY`).
+- **Rate limiting:** `/auth/login`, `/auth/register` (10/min/IP) y `/certificate/verify` (30/min/IP) para mitigar fuerza bruta y enumeración. Detrás de un proxy, configurar `TRUST_PROXY_HOPS`.
 
 ### Emails con Credenciales
-- La contraseña provisional se envía en el email de bienvenida **antes** de que sea hasheada en BD. Esto es intencional y documentado: el texto plano nunca se persiste.
-- Para producción, considerar flujo de "establecer contraseña" en lugar de enviar contraseña directamente.
+- **Por defecto (`EMAIL_INCLUDE_PASSWORD` no definido o `false`):** el email de bienvenida **NO** incluye la contraseña — sólo la cédula y un mensaje indicando que la contraseña se entrega por canal seguro. Esto evita filtrar credenciales en texto plano a través de SMTP (OWASP A02:2021) y su persistencia en el buzón del destinatario.
+- La contraseña se hashea en BD antes de cualquier envío. El texto plano nunca se persiste.
+- Si se habilita `EMAIL_INCLUDE_PASSWORD=true` (transición), el email debe recordar al usuario cambiarla tras el primer ingreso. La meta es reemplazarlo por un flujo de "establecer contraseña" con token de un solo uso.
+
+### Sanitización de HTML (XSS) — OBLIGATORIO
+- Cualquier contenido HTML proveniente del backend (plantillas de certificado `certificado_template`, contenido de módulos `data_contenido`) que se inyecte al DOM vía `dangerouslySetInnerHTML` **debe** pasar antes por `sanitizeHtml()` de `utils/sanitize.ts` (envoltorio sobre DOMPurify).
+- Esto previene XSS almacenado y la cadena de robo de JWT desde `localStorage`.
+- Reglas paralelas en el backend: `certificateTemplateService.interpolateTemplate` interpola valores en HTML crudo — escapar los valores interpolados o migrar a un motor de plantillas con auto-escaping (Handlebars).
+
+### Gestión del JWT_SECRET
+- El servidor **se niega a arrancar** si `JWT_SECRET` falta, es un placeholder conocido (`your_jwt_secret_key_here`, `fallback_secret_key_123`, etc.) o mide < 32 caracteres.
+- Generar con: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
+- El secreto **no se exporta** desde `middleware/auth.js`; la firma de tokens está centralizada en `signToken()`.
 
 ---
 
@@ -151,12 +164,14 @@ await sendWelcomeEmail(studentData);
 > [!WARNING]
 > **Brechas Conocidas:**
 > 1. **Mojibake como Parche:** `decodeMojibake` en el frontend y `normalizeToUtf8` en el backend son correcciones sintomáticas. La causa raíz es la codificación de la conexión SQLite. Requiere configurar `pragma encoding = 'UTF-8'` y retirar los helpers progresivamente.
-> 2. **Validación de Payloads Débil:** No se valida el esquema de los cuerpos de petición (crear usuario, enviar examen). Integrar `zod` en el backend para sanear los inputs antes de operar en BD.
-> 3. **Email del Estudiante Derivado:** `emailService.js` usa `${cedula}@institutosuperiordelnorte-student.co` como destinatario. Para producción real, agregar columna `email` a la tabla `usuarios`.
-> 4. **Inline Styles Masivos:** Los componentes usan extensamente `style={{}}` en línea. Migrar progresivamente a clases CSS en `index.css`.
+> 2. **Validación de Payloads Débil:** No se valida el esquema completo de los cuerpos de petición (crear usuario, enviar examen). Integrar `zod` en el backend para sanear los inputs antes de operar en BD.
+> 3. **Inline Styles Masivos:** Los componentes usan extensamente `style={{}}` en línea. Migrar progresivamente a clases CSS en `index.css`.
+> 4. **JWT en `localStorage`:** expuesto a XSS. Migrar a cookie `HttpOnly; Secure; SameSite=Strict`.
+> 5. **Verificación IDOR de matrícula:** falta middleware `requireEnrollment` en rutas de estudiante.
 
 > [!TIP]
 > **Mejoras Prioritarias:**
-> - Agregar `zod` para validación de inputs en endpoints de admin.
-> - Agregar campo `email` a tabla `usuarios` y formulario de creación de estudiante.
+> - Agregar `zod` para validación de inputs en endpoints de admin y exámenes.
 > - Resolver el encoding UTF-8 en la inicialización de SQLite para eliminar los helpers de mojibake.
+> - Implementar cookie HttpOnly para el JWT + endpoint de revocación (`/auth/logout`).
+> - Agregar `requireEnrollment` que valide la matrícula antes de servir contenido de un curso.
