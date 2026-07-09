@@ -5,7 +5,7 @@ import logoLogo from '../assets/logo_instituto_norte.png';
 import heroGraphic from '../assets/hero_graphic.png';
 import securityQR from '../assets/security_qr.png';
 import campusBuilding from '../assets/campus_building.png';
-import { Award, BookOpen, Clock, ShieldCheck, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Award, BookOpen, Clock, ShieldCheck, CheckCircle, AlertTriangle, Loader2, Users } from 'lucide-react';
 
 // Course Card Images
 import alimentosHigiene from '../assets/alimentos_higiene.png';
@@ -18,6 +18,8 @@ import manejo4x4 from '../assets/manejo_4x4.png';
 import atencionCliente from '../assets/atencion_cliente.png';
 import paqueteMedico from '../assets/paquete_medico.png';
 
+const WHATSAPP_PHONE = "3226746848";
+
 const coursesData = [
   {
     id: 1,
@@ -25,6 +27,7 @@ const coursesData = [
     descripcion: "Certificación oficial obligatoria para personal del sector de alimentos. Normativas sanitarias de higiene, control de puntos críticos y prevención de contaminación.",
     horas: 3,
     nivel: "",
+    urgencia: "Cupos limitados para esta semana",
     imagenText: "Manipulación e Higiene de Alimentos",
     imagen: alimentosHigiene
   },
@@ -34,6 +37,7 @@ const coursesData = [
     descripcion: "Análisis de peligros y control de puntos críticos. Diseñado para supervisores y jefes de calidad en la industria alimentaria.",
     horas: 8,
     nivel: "",
+    urgencia: "Descuento del 20% en modalidad virtual",
     imagenText: "Control de Calidad HACCP",
     imagen: haccpCalidad
   },
@@ -43,6 +47,7 @@ const coursesData = [
     descripcion: "Principios básicos y requisitos de higiene bajo regulaciones nacionales vigentes para establecimientos alimentarios.",
     horas: 6,
     nivel: "",
+    urgencia: "Acreditación inmediata al aprobar",
     imagenText: "Principios de Manufactura BPM",
     imagen: bpmManufactura
   },
@@ -52,6 +57,7 @@ const coursesData = [
     descripcion: "Capacitación práctica en diagnóstico preventivo, sistemas del vehículo, cambio de neumáticos y mantenimiento esencial para conductores.",
     horas: 24,
     nivel: "",
+    urgencia: "Últimos cupos con descuento",
     imagenText: "Mecánica Básica",
     imagen: mecanicaBasica
   },
@@ -61,6 +67,7 @@ const coursesData = [
     descripcion: "Formación vital en atención prehospitalaria, reanimación cardiopulmonar (RCP), manejo de heridas y respuesta inmediata ante emergencias médicas.",
     horas: 18,
     nivel: "",
+    urgencia: "Matrícula abierta - Cupos limitados",
     imagenText: "Primeros Auxilios",
     imagen: primerosAuxilios
   },
@@ -70,6 +77,7 @@ const coursesData = [
     descripcion: "Técnicas avanzadas de conducción segura, anticipación de riesgos en la vía, psicología del conductor y prevención de accidentes de tránsito.",
     horas: 20,
     nivel: "",
+    urgencia: "Acreditación inmediata al aprobar",
     imagenText: "Manejo Defensivo",
     imagen: manejoDefensivo
   },
@@ -79,6 +87,7 @@ const coursesData = [
     descripcion: "Dominio técnico de vehículos de tracción integral, control en terrenos difíciles (barro, arena, pendientes pronunciadas) y uso correcto de implementos de rescate.",
     horas: 32,
     nivel: "",
+    urgencia: "Cupos limitados para esta semana",
     imagenText: "Manejo 4x4",
     imagen: manejo4x4
   },
@@ -88,6 +97,7 @@ const coursesData = [
     descripcion: "Desarrollo de habilidades blandas, comunicación asertiva, resolución de conflictos y excelencia en el servicio para la fidelización de usuarios.",
     horas: 18,
     nivel: "",
+    urgencia: "Descuento del 20% en modalidad virtual",
     imagenText: "Atención al Cliente",
     imagen: atencionCliente
   },
@@ -97,6 +107,7 @@ const coursesData = [
     descripcion: "Compendio especializado orientado al personal asistencial, cubriendo protocolos de bioseguridad, normatividad en salud y actualización en procedimientos clínicos básicos.",
     horas: 30,
     nivel: "",
+    urgencia: "Acreditación inmediata al aprobar",
     imagenText: "Paquete Médico",
     imagen: paqueteMedico
   }
@@ -213,7 +224,7 @@ export default function HomePage() {
       <div id="home" style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 2. Sección Hero Principal */}
-        <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center', marginBottom: '64px' }}>
+        <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center', marginBottom: '40px' }}>
           <div>
             <h2 className="font-serif" style={{ fontSize: '3rem', color: 'var(--isn-blue)', lineHeight: 1.15, fontWeight: 900, marginBottom: '24px' }}>
               Formación superior para el mundo real
@@ -224,16 +235,14 @@ export default function HomePage() {
             <div style={{ display: 'flex', gap: '16px' }}>
               <button
                 onClick={() => scrollToSection('courses')}
-                className="btn"
+                className="btn btn-emerald-cta"
                 style={{
-                  background: 'var(--accent-green-btn)',
-                  color: '#FFFFFF',
                   padding: '14px 28px',
                   borderRadius: '9999px',
                   fontWeight: 700,
                   fontSize: '1rem',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)'
                 }}
               >
                 Ver Programas Académicos
@@ -277,27 +286,88 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* 3. Franja de Valor - Métricas Colectivas de Autoridad */}
+        <section className="franja-valor-container">
+          <div className="franja-valor-item">
+            <div style={{
+              background: 'rgba(212, 175, 55, 0.1)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--isn-gold)',
+              flexShrink: 0
+            }}>
+              <Award size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--isn-blue)', lineHeight: 1.2 }}>+954</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Certificaciones Emitidas Oficialmente</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--isn-gold)', fontWeight: 700, marginTop: '2px' }}>Validez Institucional Garantizada</div>
+            </div>
+          </div>
+
+          <div className="franja-valor-item">
+            <div style={{
+              background: 'rgba(15, 44, 89, 0.08)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--isn-blue)',
+              flexShrink: 0
+            }}>
+              <Users size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--isn-blue)', lineHeight: 1.2 }}>+700</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Estudiantes Graduados este mes</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--accent-green-btn)', fontWeight: 700, marginTop: '2px' }}>Prueba Social de Tracción</div>
+            </div>
+          </div>
+
+          <div className="franja-valor-item">
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.08)',
+              padding: '12px',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--accent-green-btn)',
+              flexShrink: 0
+            }}>
+              <Clock size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--isn-blue)', lineHeight: 1.2 }}>Acceso 24/7</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Campus Virtual Flexible</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--isn-blue)', fontWeight: 700, marginTop: '2px' }}>Estudia a Tu Propio Ritmo</div>
+            </div>
+          </div>
+        </section>
+
         {/* 4. Sección de Programas Destacados */}
         <section id="courses" style={{ marginBottom: '80px', paddingTop: '24px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <span style={{ color: 'var(--isn-gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.85rem' }}>Especialidades Académicas</span>
             <h3 className="font-serif" style={{ fontSize: '2.25rem', color: 'var(--isn-blue)', fontWeight: 800, marginTop: '4px' }}>Programas Disponibles</h3>
             <div style={{ width: '60px', height: '3px', backgroundColor: 'var(--isn-blue)', margin: '12px auto 0 auto', borderRadius: '2px' }} />
-            <a href="https://wa.me/" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '24px', color: 'var(--isn-charcoal)', fontSize: '0.95rem', textDecoration: 'none', border: '1px solid rgba(15, 44, 89, 0.1)', padding: '10px 20px', borderRadius: '9999px', transition: 'all 0.3s', backgroundColor: 'rgba(15, 44, 89, 0.02)' }}>
+            <a 
+              href={`https://wa.me/${WHATSAPP_PHONE}?text=Hola!%20Necesito%20asesoría%20para%20elegir%20un%20programa%20en%20el%20Instituto%20Superior%20del%20Norte.`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style={{ display: 'inline-block', marginTop: '24px', color: 'var(--isn-charcoal)', fontSize: '0.95rem', textDecoration: 'none', border: '1px solid rgba(15, 44, 89, 0.1)', padding: '10px 20px', borderRadius: '9999px', transition: 'all 0.3s', backgroundColor: 'rgba(15, 44, 89, 0.02)' }}
+            >
               ¿Necesitas una certificación en específico? <span style={{ color: 'var(--isn-blue)', fontWeight: 700 }}>Contáctanos y te ayudamos</span>
             </a>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px' }}>
             {coursesData.map((course) => (
-              <div key={course.id} className="glass-panel course-card" style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '20px',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'transform 0.3s, box-shadow 0.3s'
-              }}>
+              <div key={course.id} className="course-card-premium">
                 {/* Visual Placeholder for Course Image */}
                 <div style={{
                   height: '180px',
@@ -314,7 +384,7 @@ export default function HomePage() {
                     <img
                       src={course.imagen}
                       alt={course.titulo}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       className="course-image-hover"
                     />
                   ) : (
@@ -323,6 +393,27 @@ export default function HomePage() {
                       <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>{course.imagenText}</span>
                     </>
                   )}
+                  
+                  {/* Scarcity / Urgency dynamic micro-badge */}
+                  {course.urgencia && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      backgroundColor: 'rgba(212, 175, 55, 0.95)',
+                      backdropFilter: 'blur(4px)',
+                      color: 'var(--isn-blue-dark)',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      padding: '4px 10px',
+                      borderRadius: '9999px',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                      zIndex: 10
+                    }}>
+                      {course.urgencia}
+                    </div>
+                  )}
+
                   {course.nivel && (
                     <div style={{
                       position: 'absolute',
@@ -355,20 +446,22 @@ export default function HomePage() {
                     </div>
 
                     <a
-                      href="https://wa.me/"
+                      href={`https://wa.me/${WHATSAPP_PHONE}?text=Hola,%20estoy%20interesado%20en%20matricularme%20en%20el%20${encodeURIComponent(course.titulo)}%20del%20Instituto%20Superior%20del%20Norte.`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="gold-accent-hover"
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: 'var(--isn-blue)',
-                        fontWeight: 700,
+                        color: 'var(--accent-green-btn)',
+                        fontWeight: 800,
                         cursor: 'pointer',
                         fontSize: '0.9rem',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        textDecoration: 'none'
+                        textDecoration: 'none',
+                        transition: 'transform 0.16s var(--ease-premium), color 0.15s ease'
                       }}
                     >
                       Matricularse →
@@ -379,6 +472,7 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
         {/* 5. Sección de Verificación en Línea */}
         <section id="verification" className="glass-panel" style={{
           backgroundColor: '#FFFFFF',
@@ -397,7 +491,7 @@ export default function HomePage() {
                 Todos los certificados emitidos por el Instituto Superior del Norte poseen un código único de verificación. Los empleadores y autoridades sanitarias pueden comprobar de manera inmediata la autenticidad de cualquier credencial académica en nuestro servidor central.
               </p>
 
-              {/* Formular input estilizado */}
+              {/* Formular input de verificación */}
               <form onSubmit={handleVerify} style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <input
@@ -437,36 +531,42 @@ export default function HomePage() {
                 </button>
               </form>
 
-              {/* Results Container */}
+              {/* Results Container with Micro-animations */}
               {verifyError && (
-                <div style={{
-                  marginTop: '20px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  color: 'var(--accent-rose)',
-                  fontSize: '0.9rem'
-                }}>
+                <div 
+                  className="animate-scale-in-up"
+                  style={{
+                    marginTop: '20px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    color: 'var(--accent-rose)',
+                    fontSize: '0.9rem'
+                  }}
+                >
                   <AlertTriangle size={20} style={{ flexShrink: 0 }} />
                   <span>{verifyError}</span>
                 </div>
               )}
 
               {verifyResult && (
-                <div style={{
-                  marginTop: '20px',
-                  backgroundColor: 'rgba(15, 44, 89, 0.03)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  color: 'var(--isn-blue-dark)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
+                <div 
+                  className="animate-scale-in-up"
+                  style={{
+                    marginTop: '20px',
+                    backgroundColor: 'rgba(15, 44, 89, 0.03)',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    color: 'var(--isn-blue-dark)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--isn-blue)', fontWeight: 800, fontSize: '0.95rem', marginBottom: '4px' }}>
                     <CheckCircle size={18} />
                     <span>CERTIFICADO OFICIAL VÁLIDO</span>
@@ -553,7 +653,7 @@ export default function HomePage() {
               El Instituto Superior del Norte (ISN) es un centro de formación superior enfocado en proveer cursos, diplomados y capacitaciones profesionales con certificación oficial para la inserción en el mercado productivo.
             </p>
             <p style={{ fontSize: '0.95rem', color: 'var(--isn-charcoal)', lineHeight: '1.6' }}>
-              NuestroCampus Virtual cuenta con ambientes dinámicos de aprendizaje, simuladores multimedia avanzados y sistemas automatizados de calificación y emisión de registros para garantizar un proceso educativo transparente, ágil y de excelencia.
+              Nuestro Campus Virtual cuenta con ambientes dinámicos de aprendizaje, simuladores multimedia avanzados y sistemas automatizados de calificación y emisión de registros para garantizar un proceso educativo transparente, ágil y de excelencia.
             </p>
           </div>
         </section>
@@ -580,6 +680,24 @@ export default function HomePage() {
           </p>
         </div>
       </footer>
+
+      {/* Botón de WhatsApp Flotante Magnético estilo Grounded Pill */}
+      <a
+        href={`https://wa.me/${WHATSAPP_PHONE}?text=Hola!%20Necesito%20asesoría%20para%20elegir%20un%20programa%20en%20el%20Instituto%20Superior%20del%20Norte.`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="whatsapp-float-pill whatsapp-pulse"
+      >
+        <svg 
+          viewBox="0 0 24 24" 
+          width="22" 
+          height="22" 
+          fill="currentColor"
+        >
+          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.623-1.023-5.086-2.884-6.948C16.593 2.016 14.121.995 11.5.995 6.066.995 1.641 5.365 1.637 10.796c-.001 1.716.463 3.397 1.346 4.876l-.988 3.606 3.662-.924zm12.333-5.267c-.328-.164-1.94-.959-2.241-1.07-.302-.111-.522-.164-.741.164-.219.329-.851 1.07-.104 1.18.15.22.428.329.756.164.329-.164 1.38-.51 2.63-1.625.973-.867 1.629-1.94 1.82-2.268.19-.329.02-.507-.145-.671-.148-.148-.329-.383-.493-.574-.164-.19-.219-.329-.329-.548-.11-.22-.055-.411-.027-.574.028-.164.219-.877.3-.11.082.329.082.602.082 1.07s-.329 1.479-.493 1.753c-.164.274-.63 1.151-1.326 1.753-.556.482-1.03.626-1.424.685-.395.06-.713.041-1.028-.013-.356-.062-1.121-.29-2.122-1.187-.777-.697-1.302-1.558-1.455-1.832z" />
+        </svg>
+        <span>Asesoría en línea</span>
+      </a>
     </div>
   );
 }
