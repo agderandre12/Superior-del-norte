@@ -1364,10 +1364,22 @@ function getExamQuestionsWithAnswers(courseId = 1) {
   });
 }
 
+function getRandomDateFrom2020ToPresent() {
+  const start = new Date('2020-01-01').getTime();
+  const end = new Date().getTime(); // Fecha de hoy en tiempo real
+  const randomTimestamp = Math.floor(Math.random() * (end - start)) + start;
+  const randomDate = new Date(randomTimestamp);
+
+  const year = randomDate.getFullYear();
+  const month = String(randomDate.getMonth() + 1).padStart(2, '0');
+  const day = String(randomDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`; // Formato estándar YYYY-MM-DD
+}
+
 // Certificates
-function createCertificate(cedula, verificationCode, calificacion_obtenida, numero_certificado, courseId = 1) {
+function createCertificate(cedula, verificationCode, calificacion_obtenida, numero_certificado, courseId = 1, fechaEmision = null) {
   return new Promise((resolve, reject) => {
-    const fecha = new Date().toISOString().split('T')[0];
+    const fecha = fechaEmision || new Date().toISOString().split('T')[0];
     if (dbType === 'sqlite') {
       sqliteDB.run(
         `INSERT OR REPLACE INTO certificados (codigo_verificacion, usuario_cedula, curso_id, fecha_emision, calificacion_obtenida, numero_certificado) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1767,18 +1779,36 @@ function bypassCertify(cedula, courseId, opts = {}) {
     const score = 100;
     const approved = 1;
     const now = new Date().toISOString();
-    const fecha = now.split('T')[0];
 
     if (dbType === 'sqlite') {
-      // Transaction helpers: no-op when already inside a parent transaction
-      const beginTxn  = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('BEGIN TRANSACTION', cb);
-      const commitTxn = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('COMMIT', cb);
-      const rollbackTxn = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('ROLLBACK', cb);
+      sqliteDB.get(`SELECT * FROM cursos WHERE id = ?`, [courseId], (errCourse, course) => {
+        if (errCourse) return reject(errCourse);
 
-      sqliteDB.serialize(() => {
-        // 1. Get all modules for this course
-        sqliteDB.all(`SELECT id FROM modulos WHERE curso_id = ?`, [courseId], (err, modules) => {
-          if (err) return reject(err);
+        const esBachillerato = course && (
+          String(course.titulo || '').toLowerCase().includes('bachiller') || 
+          course.certificacion_directa === 1
+        );
+
+        let fecha;
+        if (esBachillerato) {
+          fecha = getRandomDateFrom2020ToPresent();
+        } else {
+          const hoy = new Date();
+          const year = hoy.getFullYear();
+          const month = String(hoy.getMonth() + 1).padStart(2, '0');
+          const day = String(hoy.getDate()).padStart(2, '0');
+          fecha = `${year}-${month}-${day}`;
+        }
+
+        // Transaction helpers: no-op when already inside a parent transaction
+        const beginTxn  = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('BEGIN TRANSACTION', cb);
+        const commitTxn = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('COMMIT', cb);
+        const rollbackTxn = inTransaction ? (cb) => cb(null) : (cb) => sqliteDB.run('ROLLBACK', cb);
+
+        sqliteDB.serialize(() => {
+          // 1. Get all modules for this course
+          sqliteDB.all(`SELECT id FROM modulos WHERE curso_id = ?`, [courseId], (err, modules) => {
+            if (err) return reject(err);
 
           beginTxn((errBegin) => {
             if (errBegin) return reject(errBegin);
@@ -1841,9 +1871,27 @@ function bypassCertify(cedula, courseId, opts = {}) {
           });
         });
       });
-    } else {
+    });
+  } else {
       // JSON DB fallback
       try {
+        const course = (jsonDb.courses || []).find(c => c.id === courseId);
+        const esBachillerato = course && (
+          String(course.titulo || '').toLowerCase().includes('bachiller') || 
+          course.certificacion_directa === 1
+        );
+
+        let fecha;
+        if (esBachillerato) {
+          fecha = getRandomDateFrom2020ToPresent();
+        } else {
+          const hoy = new Date();
+          const year = hoy.getFullYear();
+          const month = String(hoy.getMonth() + 1).padStart(2, '0');
+          const day = String(hoy.getDate()).padStart(2, '0');
+          fecha = `${year}-${month}-${day}`;
+        }
+
         // 1. Get all modules for this course
         const courseModules = (jsonDb.modules || []).filter(m => m.curso_id === courseId);
 
@@ -2428,5 +2476,6 @@ module.exports = {
   updateCourseModule,
   updateStudentProfile,
   getCourseById,
-  getFinancialMetrics
+  getFinancialMetrics,
+  getRandomDateFrom2020ToPresent
 };

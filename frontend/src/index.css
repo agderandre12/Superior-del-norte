@@ -6,9 +6,9 @@
   --isn-bg-light: #F7F9FA;
   --isn-blue: #0F2C59;
   --isn-blue-dark: #071E3D;
-  --isn-gold: #D4AF37; /* Premium Gold instead of Orange */
+  --isn-gold: #D4AF37; /* Premium Gold exclusively for highlighted micro-interactions */
   --isn-charcoal: #2D3748;
-  --isn-success: #1D4ED8; /* Vibrant Blue for active progress/success states */
+  --isn-success: #0F2C59; /* Remapped active/success primary buttons to corporate blue */
 
   --bg-primary: var(--isn-bg-light);
   --bg-secondary: #FFFFFF;
@@ -16,8 +16,8 @@
   --border-glass: #E2E8F0;
   --border-active: var(--isn-gold);
   
-  --accent-emerald: var(--isn-success); /* Re-mapped to Blue */
-  --accent-emerald-hover: #1E40AF;
+  --accent-emerald: var(--isn-blue); /* Re-mapped to Azul Corporativo */
+  --accent-emerald-hover: #0A1F3F;   /* Darker Corporate Blue for hover */
   --accent-teal: #008DDA;
   --accent-gold: var(--isn-gold);
   --accent-gold-hover: #B89028;
@@ -31,11 +31,15 @@
   --text-secondary: var(--isn-charcoal);
   --text-muted: #64748B;
   
-  --shadow-glow: 0 4px 20px rgba(15, 44, 89, 0.06);
-  --shadow-card: 0 10px 30px -5px rgba(15, 44, 89, 0.04), 0 8px 20px -6px rgba(15, 44, 89, 0.03);
+  --shadow-glow: 0 4px 20px rgba(15, 44, 89, 0.04);
+  --shadow-card: 0 16px 40px -10px rgba(15, 44, 89, 0.04), 0 8px 24px -12px rgba(15, 44, 89, 0.02);
   
   --font-title: 'Outfit', sans-serif;
   --font-body: 'Plus Jakarta Sans', sans-serif;
+
+  /* Premium custom easing curves */
+  --ease-premium: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-premium: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 .font-serif {
@@ -51,7 +55,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  transition: background-color 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.2s;
+  transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
 }
 
 body {
@@ -74,13 +78,13 @@ h1, h2, h3, h4, h5, h6 {
 .glass-panel {
   background: var(--bg-secondary);
   border: none;
-  border-radius: 20px; /* Fluid, organic rounded corners */
+  border-radius: 24px; /* Fluid, organic rounded corners - 24px */
   box-shadow: var(--shadow-card);
 }
 
 .glass-panel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 40px -10px rgba(15, 44, 89, 0.08), 0 10px 20px -10px rgba(15, 44, 89, 0.05);
+  transform: translateY(-4px);
+  box-shadow: 0 24px 48px -12px rgba(15, 44, 89, 0.06), 0 12px 24px -12px rgba(15, 44, 89, 0.03);
 }
 
 .glow-panel {
@@ -93,25 +97,25 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 12px 28px;
   font-family: var(--font-title);
   font-weight: 600;
   border-radius: 9999px; /* Max roundness - Grounded Pill */
   cursor: pointer;
   border: none; /* No outline/stroke border */
   font-size: 0.95rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.16s var(--ease-premium), background-color 0.2s ease, box-shadow 0.2s ease-out;
 }
 
 .btn-primary {
-  background: var(--accent-emerald); /* This is now Blue */
+  background: var(--accent-emerald); /* This is now Corporate Blue */
   color: #FFFFFF;
 }
 
 .btn-primary:hover {
   background: var(--accent-emerald-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(15, 44, 89, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(15, 44, 89, 0.16);
 }
 
 .btn-secondary {
@@ -121,6 +125,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .btn-secondary:hover {
   background: #E2E8F0;
+  transform: translateY(-1px);
 }
 
 .btn-danger {
@@ -129,8 +134,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-danger:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(239, 68, 68, 0.16);
 }
 
 .btn:disabled {
@@ -930,5 +935,208 @@ h1, h2, h3, h4, h5, h6 {
     margin: 0; padding: 0; box-shadow: none; border: none;
   }
   nav, footer, .bachiller-panel-side, .bachiller-back-btn { display: none !important; }
+}
+
+/* Premium micro-interactions and utilities */
+.gold-accent-hover:hover {
+  color: var(--isn-gold) !important;
+}
+
+.premium-gold-border {
+  border: 1px solid rgba(212, 175, 55, 0.15) !important;
+}
+
+.premium-gold-border-active {
+  border: 1.5px solid var(--isn-gold) !important;
+}
+
+.whatsapp-float-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  background-color: #25D366;
+  color: white;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.whatsapp-float-btn:hover {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(37, 211, 102, 0.35);
+}
+
+/* Breath pulse animation for premium floating support */
+@keyframes support-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(37, 211, 102, 0.45);
+  }
+}
+
+.whatsapp-pulse {
+  animation: support-pulse 3s infinite ease-in-out;
+}
+
+/* Fade-in-up layout animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ==========================================================================
+   Premium Redesign Additions (Instituto Superior del Norte)
+   ========================================================================== */
+
+/* Premium Course Card Styles (Borders removed, 24px rounded, soft shadows) */
+.course-card-premium {
+  background-color: #FFFFFF;
+  border-radius: 24px !important;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: none !important;
+  transition: transform 0.2s var(--ease-premium), box-shadow 0.2s ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .course-card-premium:hover {
+    transform: translateY(-6px) scale(1.015);
+    box-shadow: 0 24px 48px -12px rgba(15, 44, 89, 0.08), 0 12px 24px -12px rgba(15, 44, 89, 0.04);
+  }
+  .course-card-premium:hover .course-image-hover {
+    transform: scale(1.06);
+  }
+}
+
+.course-card-premium:active {
+  transform: scale(0.985) translateY(-2px);
+}
+
+.course-image-hover {
+  transition: transform 0.4s var(--ease-premium) !important;
+}
+
+/* Grounded Pill floating WhatsApp button style */
+.whatsapp-float-pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  background-color: #25D366;
+  color: #FFFFFF;
+  padding: 12px 22px;
+  border-radius: 9999px; /* Max roundness - Grounded Pill */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-premium), box-shadow 0.2s ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .whatsapp-float-pill:hover {
+    transform: scale(1.06) translateY(-2px);
+    box-shadow: 0 12px 32px rgba(37, 211, 102, 0.35);
+  }
+}
+
+.whatsapp-float-pill:active {
+  transform: scale(0.97) translateY(0);
+}
+
+/* Micro-animations for public verification forms and panels */
+@keyframes scaleInUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-scale-in-up {
+  animation: scaleInUp 0.3s var(--ease-premium) forwards;
+}
+
+/* Franja de Valor Styles */
+.franja-valor-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+  margin-bottom: 64px;
+}
+
+.franja-valor-item {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 20px rgba(15, 44, 89, 0.02);
+  transition: transform 0.2s var(--ease-premium), box-shadow 0.2s ease-out, background-color 0.2s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .franja-valor-item:hover {
+    transform: translateY(-2px);
+    background: #FFFFFF;
+    box-shadow: 0 12px 28px rgba(15, 44, 89, 0.05);
+  }
+}
+
+.franja-valor-item:active {
+  transform: scale(0.98);
+}
+
+/* Main CTA Emerald Button */
+.btn-emerald-cta {
+  background-color: var(--accent-green-btn);
+  color: #FFFFFF;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-emerald-cta:hover {
+    background-color: var(--accent-green-btn-hover) !important;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px -4px rgba(16, 185, 129, 0.3) !important;
+  }
+}
+
+.btn-emerald-cta:active {
+  transform: scale(0.97) translateY(0) !important;
 }
 

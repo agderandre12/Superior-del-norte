@@ -1,7 +1,851 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
+const { Writable } = require('stream');
 require('dotenv').config();
+
+/**
+ * Visual identity tokens — single source of truth for the institutional palette.
+ * STRICT PROHIBITION: the color orange must never appear in any rendered asset.
+ */
+const ISN_BLUE = '#0F2C59';
+const ISN_GOLD = '#D4AF37';
+const ISN_INK = '#0a2a55';
+const ISN_BG_SOFT = '#F7F9FA';
+const ISN_GREY_TEXT = '#475569';
+const ISN_GREY_LINE = '#CBD5E1';
+
+/**
+ * Canonical signing authorities for all Bachillerato Académico documents.
+ */
+const RECTOR = { nombre: 'STEVEN CARDENAS LEON', cargo: 'Rector' };
+const SECRETARIA = { nombre: 'LUISA FERNANDA AVILA GONZÁLEZ', cargo: 'Secretaria Académica' };
+
+const MESES_ES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+];
+
+/**
+ * The 9 mandatory knowledge areas for the Bachillerato Académico (CLEI VI).
+ */
+const BACHILLER_AREAS = [
+  { nombre: 'Matemáticas', ihs: 2 },
+  { nombre: 'Lenguaje Castellano', ihs: 2 },
+  { nombre: 'Sociales', ihs: 1 },
+  { nombre: 'Biología', ihs: 1 },
+  { nombre: 'Inglés', ihs: 1 },
+  { nombre: 'Informática', ihs: 1 },
+  { nombre: 'Ética y Educación Religiosa', ihs: 1 },
+  { nombre: 'Artes y Educación Física', ihs: 1 },
+  { nombre: 'Comportamiento', ihs: null }
+];
+
+/**
+ * Resolves the institutional asset path, returning null when the file is absent.
+ * @param {string} filename
+ * @returns {string|null}
+ */
+function getAssetPath(filename) {
+  const p = path.join(__dirname, '..', 'assets', filename);
+  return fs.existsSync(p) ? p : null;
+}
+
+/**
+ * Simple hash-based seed generator for deterministic pseudo-random values.
+ * @param {string} seedStr
+ * @returns {Function}
+ */
+function seedRandom(seedStr) {
+  let h = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h = (h << 5) - h + seedStr.charCodeAt(i);
+    h |= 0;
+  }
+  return function () {
+    let t = h += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Pure function: maps a quantitative grade to its qualitative Colombian
+ * performance label (DRY — single source of truth shared by every generator).
+ *   4.1 – 4.5  -> ALTO
+ *   4.6 – 5.0  -> SUPERIOR
+ * @param {number} grade
+ * @returns {string}
+ */
+function mapQualitativeGrade(grade) {
+  return grade >= 4.6 ? 'SUPERIOR' : 'ALTO';
+}
+
+/**
+ * Pure function: generates deterministic-within-call random quantitative
+ * grades (one decimal, range 4.1–5.0) for the 9 mandatory areas and derives
+ * their qualitative mapping. Centralised here per KISS/DRY.
+ * @param {string} [seed]
+ * @returns {Array<{area:string, ihs:number|null, cuantitativo:string, cualitativo:string}>}
+ */
+function generateBachilleratoGrades(seed) {
+  const rand = seed ? seedRandom(String(seed)) : Math.random;
+  return BACHILLER_AREAS.map((area) => {
+    const raw = rand() * (5.0 - 4.1) + 4.1;
+    const rounded = Math.round(raw * 10) / 10;
+    return {
+      area: area.nombre,
+      ihs: area.ihs,
+      cuantitativo: rounded.toFixed(1),
+      cualitativo: mapQualitativeGrade(rounded)
+    };
+  });
+}
+
+/**
+ * Identifies whether a course record corresponds to the Bachillerato Académico
+ * titulation (direct certification + "Bachiller" in the title).
+ * @param {Object} course
+ * @returns {boolean}
+ */
+function isHighSchoolCourse(course) {
+  if (!course || course.certificacion_directa !== 1) return false;
+  return String(course.titulo || '').toLowerCase().includes('bachiller');
+}
+
+/**
+ * Formats a YYYY-MM-DD date string into Spanish long-form components.
+ * @param {string} dateStr
+ * @returns {{day:(string|number), month:string, year:(string|number)}}
+ */
+function formatSpanishDate(dateStr) {
+  if (!dateStr) return { day: '', month: '', year: '' };
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return { day: '', month: '', year: '' };
+  return { day: d.getDate(), month: MESES_ES[d.getMonth()], year: d.getFullYear() };
+}
+
+/**
+ * Extracts the sequential degree number from a certificado registry code.
+ * @param {string} numeroCertificado
+ * @returns {string}
+ */
+function extractDegreeSeq(numeroCertificado) {
+  if (!numeroCertificado) return '0001';
+  const digits = String(numeroCertificado).replace(/[^0-9]+$/, '');
+  return digits.split('-').pop() || '0001';
+}
+
+/**
+ * Draws a hyperrealistic handwritten signature using stylized bezier strokes
+ * (semi-transparent ink flow). Evokes a physically hand-signed document and
+ * deliberately avoids generic text boxes or "digital checkboxes".
+ *
+ * Two distinct variants keep the Rector and Secretaria signatures visually
+ * unique but deterministic for the same signatory.
+ *
+ * @param {PDFKit.PDFDocument} doc
+ * @param {'rector'|'secretaria'} variant
+ * @param {number} x          top-left x of the signature bounding box
+ * @param {number} y          baseline anchor y
+ * @param {number} scale      uniform scale applied to the 170×60 unit glyph
+ */
+function drawSignature(doc, variant, x, y, scale = 0.5) {
+  doc.save();
+  doc.translate(x, y);
+  doc.scale(scale);
+  doc.lineCap('round').lineJoin('round');
+  doc.strokeColor(ISN_INK);
+  doc.opacity(0.9);
+  doc.lineWidth(1.5);
+
+  if (variant === 'rector') {
+    doc.moveTo(0, 32)
+      .bezierCurveTo(10, 8, 24, 8, 32, 28)
+      .bezierCurveTo(38, 42, 46, 42, 54, 24)
+      .bezierCurveTo(62, 8, 76, 10, 84, 32)
+      .bezierCurveTo(90, 46, 98, 46, 106, 26)
+      .bezierCurveTo(114, 12, 126, 14, 132, 32)
+      .bezierCurveTo(138, 40, 146, 40, 152, 26)
+      .bezierCurveTo(156, 20, 166, 24, 160, 33)
+      .stroke();
+    doc.moveTo(4, 45)
+      .quadraticCurveTo(80, 56, 164, 46)
+      .stroke();
+    doc.moveTo(150, 46)
+      .bezierCurveTo(156, 50, 162, 48, 162, 42)
+      .stroke();
+  } else {
+    doc.moveTo(0, 30)
+      .bezierCurveTo(12, 10, 28, 10, 36, 28)
+      .bezierCurveTo(44, 44, 54, 44, 62, 26)
+      .bezierCurveTo(70, 10, 84, 12, 90, 30)
+      .bezierCurveTo(96, 42, 104, 42, 110, 26)
+      .bezierCurveTo(118, 14, 128, 16, 134, 34)
+      .bezierCurveTo(140, 42, 148, 42, 154, 26)
+      .stroke();
+    doc.moveTo(6, 44)
+      .quadraticCurveTo(75, 52, 130, 43)
+      .stroke();
+    doc.moveTo(24, 49)
+      .quadraticCurveTo(64, 54, 110, 47)
+      .stroke();
+  }
+
+  doc.restore();
+}
+
+/**
+ * Renders a parallel signature block (stylized signature + name + charge)
+ * centered over a column starting at `x` with the given `width`.
+ *
+ * @param {PDFKit.PDFDocument} doc
+ * @param {'rector'|'secretaria'} variant
+ * @param {Object} authority   { nombre, cargo }
+ * @param {number} x
+ * @param {number} width
+ * @param {number} lineY       y of the solid signature rule
+ */
+function renderSignatureBlock(doc, variant, authority, x, width, lineY) {
+  doc.save();
+  const fontPath = getAssetPath('GreatVibes-Regular.ttf');
+  if (fontPath) {
+    doc.registerFont('SignatureFont', fontPath);
+    doc.font('SignatureFont').fontSize(10).fillColor(ISN_BLUE);
+  } else {
+    doc.font('Times-Italic').fontSize(10).fillColor(ISN_BLUE);
+  }
+  doc.text(authority.nombre, x, lineY - 20, { width, align: 'center' });
+  doc.restore();
+
+  doc.moveTo(x, lineY).lineTo(x + width, lineY)
+    .lineWidth(1).strokeColor('#94A3B8').stroke();
+
+  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(8.5)
+    .text(authority.nombre, x, lineY + 5, { width, align: 'center' });
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(7.5)
+    .text(authority.cargo, x, lineY + 16, { width, align: 'center' });
+  doc.font('Helvetica').fontSize(7.5).fillColor('#64748B')
+    .text('Instituto Superior del Norte', x, lineY + 26, { width, align: 'center' });
+}
+
+/**
+ * Draws the decorative premium frame (blue outer + gold inner + corner marks).
+ * Works for both portrait and landscape since it reads doc.page dimensions.
+ *
+ * @param {PDFKit.PDFDocument} doc
+ */
+function renderPremiumFrame(doc) {
+  const { width, height } = doc.page;
+  doc.rect(18, 18, width - 36, height - 36).lineWidth(4).stroke(ISN_BLUE);
+  doc.rect(26, 26, width - 52, height - 52).lineWidth(1.5).stroke(ISN_GOLD);
+  const c = 18;
+  const s = 16;
+  doc.lineWidth(1).strokeColor(ISN_GOLD);
+  doc.rect(22, 22, s, s).stroke();
+  doc.rect(width - 22 - s, c, s, s).stroke();
+  doc.rect(22, height - 22 - s, s, s).stroke();
+  doc.rect(width - 22 - s, height - 22 - s, s, s).stroke();
+}
+
+/**
+ * Draws a structured grades table with a navy header band, zebra rows and a
+ * hairline grid. Returns the y-coordinate directly below the table.
+ *
+ * @param {PDFKit.PDFDocument} doc
+ * @param {number} x
+ * @param {number} y
+ * @param {number[]} colWidths
+ * @param {string[]} headers
+ * @param {Array<Array<string>>} rows
+ * @param {number} rowHeight
+ * @returns {number} bottom y
+ */
+function drawGradesTable(doc, x, y, colWidths, headers, rows, rowHeight) {
+  const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  const headerHeight = rowHeight + 4;
+
+  doc.fillColor(ISN_BLUE).rect(x, y, totalWidth, headerHeight).fill();
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8);
+  let cx = x;
+  headers.forEach((h, i) => {
+    doc.text(h, cx + 3, y + 8, { width: colWidths[i] - 6, align: 'center' });
+    cx += colWidths[i];
+  });
+
+  let ry = y + headerHeight;
+  rows.forEach((row, idx) => {
+    if (idx % 2 === 1) {
+      doc.fillColor(ISN_BG_SOFT).rect(x, ry, totalWidth, rowHeight).fill();
+    }
+    doc.fillColor('#1E293B');
+    cx = x;
+    row.forEach((cell, i) => {
+      const align = i === 0 ? 'left' : 'center';
+      const weight = i >= 2 ? 'Helvetica-Bold' : 'Helvetica';
+      doc.font(weight).fontSize(9);
+      doc.text(String(cell), cx + 6, ry + 7, { width: colWidths[i] - 12, align });
+      cx += colWidths[i];
+    });
+    ry += rowHeight;
+  });
+
+  doc.lineWidth(1).strokeColor(ISN_BLUE).rect(x, y, totalWidth, ry - y).stroke();
+  doc.lineWidth(0.5).strokeColor(ISN_GREY_LINE);
+  let vx = x;
+  for (let i = 0; i < colWidths.length; i++) {
+    vx += colWidths[i];
+    doc.moveTo(vx, y).lineTo(vx, ry).stroke();
+  }
+  let hy = y + headerHeight;
+  for (let r = 0; r < rows.length; r++) {
+    hy += rowHeight;
+    doc.moveTo(x, hy).lineTo(x + totalWidth, hy).stroke();
+  }
+
+  doc.y = ry + 12;
+  return ry;
+}
+
+/**
+ * Renders the two-symbol institutional header (Escudo de Colombia + logo)
+ * centered horizontally on the page.
+ *
+ * @param {PDFKit.PDFDocument} doc
+ * @param {number} y
+ * @param {number} gap
+ */
+function renderInstitutionalHeader(doc, y, gap = 320) {
+  const escudoPath = getAssetPath('escudo_colombia.png');
+  const logoPath = getAssetPath('logo instituto superior del norte.png');
+  const { width } = doc.page;
+  const imgH = 62;
+  let leftW = 0;
+  let rightW = 0;
+  if (escudoPath) {
+    const img = doc.openImage(escudoPath);
+    leftW = imgH * (img.width / img.height);
+    doc.image(img, width / 2 - gap / 2 - leftW / 2, y, { height: imgH });
+  }
+  if (logoPath) {
+    const img = doc.openImage(logoPath);
+    rightW = imgH * (img.width / img.height);
+    doc.image(img, width / 2 + gap / 2 - rightW / 2, y, { height: imgH });
+  }
+}
+
+/**
+ * Renders the Escudo de Colombia as a centralized watermark background.
+ * @param {PDFKit.PDFDocument} doc
+ */
+function renderWatermarkEscudo(doc) {
+  const escudoPath = getAssetPath('escudo_colombia.png');
+  if (escudoPath) {
+    const { width, height } = doc.page;
+    const img = doc.openImage(escudoPath);
+    const wmH = 340;
+    const wmW = wmH * (img.width / img.height);
+    doc.save();
+    doc.fillOpacity(0.06);
+    doc.opacity(0.06);
+    doc.image(img, (width - wmW) / 2, (height - wmH) / 2, { width: wmW, height: wmH });
+    doc.restore();
+  }
+}
+
+/**
+ * Renders the High School header with the logo centered, a stylized blue ornament on the left,
+ * and centered institutional typography. The Escudo is now rendered as a watermark.
+ * @param {PDFKit.PDFDocument} doc
+ */
+function renderHighSchoolHeader(doc) {
+  const { width } = doc.page;
+  const margin = doc.page.margins.left || 50;
+
+  // 1. Stylized ornamental frame in Corporate Blue (#0F2C59) in the top left
+  doc.save();
+  doc.strokeColor(ISN_BLUE).lineWidth(2);
+  doc.moveTo(25, 65).lineTo(25, 25).lineTo(65, 25).stroke();
+  doc.moveTo(30, 60).lineTo(30, 30).lineTo(60, 30).stroke();
+  doc.rect(34, 34, 6, 6).fillColor(ISN_BLUE).fill();
+  doc.restore();
+
+  // 2. Centered Logo of "Instituto Superior del Norte"
+  const logoPath = getAssetPath('logo instituto superior del norte.png');
+  if (logoPath) {
+    const logoW = 75;
+    const logoX = (width - logoW) / 2;
+    doc.image(logoPath, logoX, 35, { width: logoW });
+  }
+
+  // 3. Centered institutional text box
+  doc.y = 135;
+  doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(7.5)
+    .text('REPÚBLICA DE COLOMBIA', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 1 });
+  doc.font('Helvetica').fontSize(7)
+    .text('MINISTERIO DE EDUCACIÓN NACIONAL', margin, doc.y + 10, { width: width - margin * 5, align: 'center', characterSpacing: 0.5 });
+
+  doc.y = 157;
+  doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(14)
+    .text('INSTITUTO SUPERIOR DEL NORTE', margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  doc.moveDown(0.25);
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(7.5)
+    .text('Resolución N° 10-50-2373 — Secretaría de Educación Municipal de Medellín', margin, doc.y, { width: width - margin * 2, align: 'center' });
+}
+
+/**
+ * Draws the double perimetral line border in Gold and corner ornaments in Blue.
+ * @param {PDFKit.PDFDocument} doc
+ */
+function renderDiplomaBorders(doc) {
+  const { width, height } = doc.page;
+  doc.save();
+
+  // Double gold perimetral line (#D4AF37)
+  doc.strokeColor(ISN_GOLD).lineWidth(1);
+  doc.rect(20, 20, width - 40, height - 40).stroke();
+  doc.rect(24, 24, width - 48, height - 48).stroke();
+
+  // Corner ornaments in Corporate Blue (#0F2C59)
+  doc.strokeColor(ISN_BLUE).lineWidth(2);
+
+  // Top-left corner
+  doc.moveTo(20, 50).lineTo(20, 20).lineTo(50, 20).stroke();
+  doc.moveTo(24, 46).lineTo(24, 24).lineTo(46, 24).stroke();
+
+  // Top-right corner
+  doc.moveTo(width - 50, 20).lineTo(width - 20, 20).lineTo(width - 20, 50).stroke();
+  doc.moveTo(width - 46, 24).lineTo(width - 24, 24).lineTo(width - 24, 46).stroke();
+
+  // Bottom-left corner
+  doc.moveTo(20, height - 50).lineTo(20, height - 20).lineTo(50, height - 20).stroke();
+  doc.moveTo(24, height - 46).lineTo(24, height - 24).lineTo(46, height - 24).stroke();
+
+  // Bottom-right corner
+  doc.moveTo(width - 50, height - 20).lineTo(width - 20, height - 20).lineTo(width - 20, height - 50).stroke();
+  doc.moveTo(width - 46, height - 24).lineTo(width - 24, height - 24).lineTo(width - 24, height - 46).stroke();
+
+  doc.restore();
+}
+
+// ---------------------------------------------------------------------------
+// DOCUMENT 1 — Certificado de Notas (CLEI VI / Grado 11º)
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the Certificado de Notas onto the current page of `doc`.
+ * @param {PDFKit.PDFDocument} doc
+ * @param {Object} studentData
+ * @param {Object} certData
+ * @private
+ */
+function _renderGradesCertificate(doc, studentData, certData) {
+  const { width } = doc.page;
+  const margin = 80;
+
+  renderPremiumFrame(doc);
+  renderHighSchoolHeader(doc);
+  renderWatermarkEscudo(doc);
+
+  doc.y = 225;
+  doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(20)
+    .text('CERTIFICADO DE NOTAS', margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  doc.moveDown(0.2);
+  doc.fillColor(ISN_GOLD).font('Helvetica-Bold').fontSize(10)
+    .text('CLEI VI  ·  GRADO 11°', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 2 });
+
+  doc.moveDown(1.5);
+  const textoCertifica = `El suscrito Rector del Instituto Superior del Norte, certifica que el(la) estudiante ${String(studentData.nombre_completo || '').toUpperCase()}, identificado(a) con Cédula de Ciudadanía N° ${studentData.cedula || ''}, cursó y aprobó las áreas obligatorias del conocimiento correspondientes al Ciclo Lectivo Especial Integrado (CLEI VI), equivalente al grado undécimo (11°) de Educación Media Académica.`;
+  doc.fillColor('#1E293B')
+    .font('Helvetica')
+    .fontSize(10)
+    .text(textoCertifica, margin, doc.y, { width: width - margin * 2, align: 'center', lineGap: 4 });
+
+  doc.moveDown(1.2);
+  const tableX = margin;
+  const colWidths = [182, 40, 115, 115];
+  const headers = ['ÁREAS', 'I.H.S', 'DESEMPEÑO CUANTITATIVO', 'DESEMPEÑO CUALITATIVO'];
+  const grades = (certData && certData.grades) ? certData.grades : generateBachilleratoGrades(studentData && studentData.cedula);
+  const rows = grades.map((g) => [g.area, g.ihs === null ? '—' : String(g.ihs), g.cuantitativo, g.cualitativo]);
+  const tableBottom = drawGradesTable(doc, tableX, doc.y, colWidths, headers, rows, 22);
+
+  // Promotion concept badge
+  doc.y = tableBottom;
+  doc.moveDown(1);
+  const badgeW = 300;
+  const badgeX = (width - badgeW) / 2;
+  doc.fillColor(ISN_BG_SOFT).roundedRect(badgeX, doc.y, badgeW, 26, 6).fill();
+  doc.lineWidth(1).strokeColor(ISN_GOLD).roundedRect(badgeX, doc.y, badgeW, 26, 6).stroke();
+  doc.fillColor(ISN_BLUE).font('Helvetica-Bold').fontSize(10)
+    .text('CONCEPTO DE PROMOCIÓN: APROBADO', badgeX, doc.y + 8, { width: badgeW, align: 'center' });
+
+  doc.y += 26;
+  doc.moveDown(1.5);
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(8)
+    .text(
+      'Escala Nacional de Valoración:  BÁSICO (3.0 – 3.9)   ·   ALTO (4.0 – 4.5)   ·   SUPERIOR (4.6 – 5.0).   ' +
+      'I.H.S = Intensidad Horaria Semanal.',
+      margin, doc.y, { width: width - margin * 2, align: 'center' }
+    );
+
+  // Rector signature (centered)
+  const { day, month, year } = formatSpanishDate(certData && certData.fecha_emision);
+  const sigW = 280;
+  const sigX = (width - sigW) / 2;
+  const sigLineY = doc.page.height - 130;
+  renderSignatureBlock(doc, 'rector', RECTOR, sigX, sigW, sigLineY);
+
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica').fontSize(9)
+    .text(
+      `Se expide en la ciudad de Medellín, Colombia${day ? `, a los ${day} días del mes de ${month} de ${year}` : ''}.`,
+      margin, doc.page.height - 80, { width: width - margin * 2, align: 'center' }
+    );
+  doc.fillColor('#64748B').font('Courier').fontSize(7.5)
+    .text(
+      `Código de Verificación: ${certData && certData.codigo_verificacion ? certData.codigo_verificacion : ''}`,
+      margin, doc.page.height - 60, { width: width - margin * 2, align: 'center' }
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DOCUMENT 2 — Acta de Grado
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the Acta de Grado onto the current page of `doc`.
+ * @param {PDFKit.PDFDocument} doc
+ * @param {Object} studentData
+ * @param {Object} certData
+ * @private
+ */
+function _renderGraduationAct(doc, studentData, certData) {
+  const { width } = doc.page;
+  const margin = 95;
+  const seq = extractDegreeSeq(certData && certData.numero_certificado);
+  const { day, month, year } = formatSpanishDate(certData && certData.fecha_emision);
+
+  renderPremiumFrame(doc);
+  renderHighSchoolHeader(doc);
+  renderWatermarkEscudo(doc);
+
+  // Separator line below header
+  doc.moveTo(margin, 172).lineTo(width - margin, 172).lineWidth(1.5).stroke(ISN_BLUE);
+
+  doc.y = 182;
+  doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(13)
+    .text(`ACTA GENERAL DE GRADUACIÓN N° ${seq}`,
+      margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 1.5 });
+
+  const bodyOpts = { width: width - margin * 2, align: 'center', lineGap: 3 };
+
+  doc.y = 205;
+  doc.fillColor('#1E293B').font('Helvetica').fontSize(9);
+  doc.text(
+    `En la ciudad de Medellín, departamento de Antioquia, República de Colombia${day ? `, a los ${day} días del mes de ${month} de ${year}` : ''}, ` +
+    `se reunieron formalmente en la sede del Instituto Superior del Norte el Rector y la Secretaria Académica, ` +
+    `con el fin de formalizar y certificar el grado del estudiante del nivel de Educación Media Académica que ` +
+    `completó satisfactoriamente la totalidad de los estudios exigidos por el plan institucional.`,
+    margin, doc.y, bodyOpts
+  );
+
+  doc.moveDown(0.8);
+  doc.text(
+    `En virtud de lo dispuesto en el Decreto 3011 de 1997 del Ministerio de Educación Nacional, reglamentado por el ` +
+    `Decreto 1075 de 2015, y previa verificación del cumplimiento de las intensidades horarias, la carpeta ` +
+    `académica y el reporte del sistema de gestión académica, se constató que el graduando aprobó satisfactoriamente ` +
+    `el programa formativo. En consecuencia, se autorizó el registro y foliación del respectivo título.`,
+    margin, doc.y, bodyOpts
+  );
+
+  // Prominent student graduando display
+  doc.moveDown(1.5);
+  doc.fillColor(ISN_BLUE).font('Helvetica-Bold').fontSize(15)
+    .text(String(studentData.nombre_completo || '').toUpperCase(), { align: 'center' });
+  doc.moveDown(1);
+
+  // Highlight box
+  const boxX = margin;
+  const boxW = width - margin * 2;
+  const boxY = doc.y;
+  const rowH = 16;
+  const fields = [
+    ['Documento de Identidad:', `C.C. N° ${studentData.cedula || ''}`],
+    ['Título Otorgado:', 'Bachiller Académico'],
+    ['Libro de Registro de Diplomas:', 'Tomo General de Bachilleres'],
+    ['Folio del Libro de Registro:', `Folio N.º ${seq}`],
+    ['Registro / Acta N°:', (certData && certData.numero_certificado) || '']
+  ];
+  doc.fillColor(ISN_BG_SOFT).rect(boxX, boxY, boxW, fields.length * rowH + 8).fill();
+  doc.lineWidth(1).strokeColor(ISN_GOLD).rect(boxX, boxY, boxW, fields.length * rowH + 8).stroke();
+  let fy = boxY + 6;
+  fields.forEach(([label, val]) => {
+    doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Bold').fontSize(8.5)
+      .text(label, boxX + 14, fy + 3, { width: boxW / 2 - 20 });
+    doc.fillColor(ISN_BLUE).font('Helvetica-Bold').fontSize(8.5)
+      .text(val, boxX + boxW / 2, fy + 3, { width: boxW / 2 - 28, align: 'right' });
+    fy += rowH;
+  });
+  doc.y = boxY + fields.length * rowH + 14;
+
+  doc.fillColor('#1E293B').font('Helvetica').fontSize(9);
+  doc.text(
+    `Por lo tanto, se procedió a expedir y hacer entrega formal del respectivo Diploma de Bachiller Académico, ` +
+    `el cual acredita al graduando ante la sociedad como egresado idóneo de esta institución.`,
+    margin, doc.y, bodyOpts
+  );
+  doc.moveDown(0.6);
+  doc.text(
+    `En constancia de lo anterior, se suscribe la presente acta académica de grado por duplicado en la ciudad de ` +
+    `Medellín, ante los directivos oficiales que al pie firman.`,
+    margin, doc.y, bodyOpts
+  );
+
+  // Parallel signatures
+  const sigLineY = doc.page.height - 140;
+  const colGap = 60;
+  const colW = (width - margin * 2 - colGap) / 2;
+  renderSignatureBlock(doc, 'rector', RECTOR, margin, colW, sigLineY);
+  renderSignatureBlock(doc, 'secretaria', SECRETARIA, margin + colW + colGap, colW, sigLineY);
+
+  doc.fillColor('#64748B').font('Helvetica').fontSize(7.5)
+    .text(
+      `Instituto Superior del Norte   ·   Registro: ${(certData && certData.numero_certificado) || ''}   ·   ` +
+      `Verificación: ${(certData && certData.codigo_verificacion) || ''}`,
+      margin, doc.page.height - 80, { width: width - margin * 2, align: 'center' }
+    );
+}
+
+// ---------------------------------------------------------------------------
+// DOCUMENT 3 — Diploma de Bachiller
+// ---------------------------------------------------------------------------
+
+/**
+ * Renders the Diploma de Bachiller (landscape) onto the current page of `doc`.
+ * @param {PDFKit.PDFDocument} doc
+ * @param {Object} studentData
+ * @param {Object} certData
+ * @private
+ */
+function _renderHighSchoolDiploma(doc, studentData, certData) {
+  doc.page.margins.bottom = 30;
+  const { width, height } = doc.page;
+
+  // ⬇️ MEJORA 1: Ampliamos el padding lateral de 80 a 95 para dar más aire en los costados
+  const margin = 95;
+  const seq = extractDegreeSeq(certData && certData.numero_certificado);
+  const { day, month, year } = formatSpanishDate(certData && certData.fecha_emision);
+
+  // Fondo (Escudo sutil en marca de agua)
+  renderWatermarkEscudo(doc);
+
+  // Marcos y esquinas doradas/azules
+  renderDiplomaBorders(doc);
+
+  // ⬇️ MEJORA 2: Bajamos el logo a Y=65 para despegarlo del borde superior
+  const logoPath = getAssetPath('logo instituto superior del norte.png');
+  if (logoPath) {
+    const logoW = 75;
+    doc.image(logoPath, (width - logoW) / 2, 65, { width: logoW });
+  }
+
+  // ⬇️ MEJORA 3: Distribución vertical absoluta milimétrica para evitar amontonamientos
+
+  // Encabezado Nacional
+  doc.y = 160;
+  doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(11)
+    .text('REPÚBLICA DE COLOMBIA', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 3 });
+
+  doc.y = 182;
+  doc.font('Times-Bold').fontSize(24).fillColor(ISN_BLUE)
+    .text('Instituto Superior del Norte', margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  doc.y = 214;
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica').fontSize(7.5)
+    .text('RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE MEDELLÍN',
+      margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 0.5 });
+
+  // Confiere a
+  doc.y = 290;
+  const name = String(studentData.nombre_completo || '').toUpperCase();
+  const tamanoFuente = name.length > 30 ? 16 : 20;
+  doc.font('Times-Bold').fontSize(tamanoFuente).fillColor(ISN_BLUE);
+
+  // ESTA ES LA ÚNICA LÍNEA DE TEXTO QUE NECESITAMOS PARA EL NOMBRE.
+  // YA SE ESTÁ CENTRANDO CORRECTAMENTE.
+  doc.text(name, margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  // Calculamos nameW y nameX SOLO para la línea dorada inferior,
+  // no para volver a escribir el texto.
+  const nameW = doc.widthOfString(name);
+  const nameX = (width - nameW) / 2;
+  // nameY ya es doc.y después de la primera escritura, no necesitamos sumarle 4.
+
+  // Línea dorada inferior del nombre
+  // Usamos doc.y (la posición actual) para la línea dorada.
+  doc.moveTo(nameX, doc.y + 1).lineTo(nameX + nameW, doc.y + 1)
+    .lineWidth(1.2).strokeColor(ISN_GOLD).stroke();
+
+  // Identificación
+  doc.y = 332;
+  doc.fillColor('#1E293B').font('Helvetica').fontSize(10.5)
+    .text(`Identificado(a) con Cédula de Ciudadanía N° ${studentData.cedula || ''}`,
+      margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  // Atribución del título
+  doc.y = 380;
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Bold').fontSize(9)
+    .text('EL TÍTULO DE', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 2 });
+
+  doc.y = 402;
+  doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(32)
+    .text('Bachiller Académico', margin, doc.y, { width: width - margin * 2, align: 'center' });
+
+  // Texto legal (Con interlineado suave de 3pt para máxima legibilidad)
+  doc.y = 460;
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica').fontSize(9.5)
+    .text(
+      'Por haber cursado y aprobado la totalidad de los estudios correspondientes al nivel de Educación Media ' +
+      'Académica, según los planes de estudio y programas vigentes de la institución, en cumplimiento de lo ' +
+      'dispuesto en el Decreto 3011 de 1997 y el Decreto 1075 de 2015 del Ministerio de Educación Nacional.',
+      margin, doc.y, { width: width - margin * 2, align: 'center', lineGap: 3 }
+    );
+
+  // ⬇️ MEJORA 4: Caja de metadatos perfectamente alineada al ancho de los márgenes dinámicos
+  doc.y = 530;
+  const metaW = width - margin * 2;
+  const metaX = margin;
+  const metaY = doc.y;
+
+  doc.fillColor(ISN_BG_SOFT).rect(metaX, metaY, metaW, 26).fill();
+  doc.lineWidth(1).strokeColor(ISN_GOLD).rect(metaX, metaY, metaW, 26).stroke();
+  doc.fillColor(ISN_BLUE).font('Helvetica-Bold').fontSize(8);
+  const cellW = metaW / 3;
+  doc.text(`Acta de Graduación N°: ${seq}`, metaX, metaY + 9, { width: cellW, align: 'center' });
+  doc.text(`Folio N°: ${seq}`, metaX + cellW, metaY + 9, { width: cellW, align: 'center' });
+  doc.text(`Registro N°: ${(certData && certData.numero_certificado) || ''}`, metaX + cellW * 2, metaY + 9, { width: cellW, align: 'center' });
+
+  // ⬇️ MEJORA 5: Ambas firmas en la misma línea, proporcionadas y con espaciado anti-colisiones lateral
+  const sigLineY = height - 125;
+  const colGap = 50;
+  const colW = (width - margin * 2 - colGap) / 2;
+
+  renderSignatureBlock(doc, 'rector', RECTOR, margin, colW, sigLineY);
+  renderSignatureBlock(doc, 'secretaria', SECRETARIA, margin + colW + colGap, colW, sigLineY);
+
+  // Fecha de expedición inferior
+  doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(8.5)
+    .text(
+      `Dado en la ciudad de Medellín, Colombia${day ? `, a los ${day} días del mes de ${month} de ${year}` : ''}.`,
+      margin, height - 55, { width: width - margin * 2, align: 'center' }
+    );
+
+  // Código de verificación en el borde inferior
+  doc.fillColor('#94A3B8').font('Courier').fontSize(7.5)
+    .text(
+      `Código de Verificación: ${(certData && certData.codigo_verificacion) || ''}`,
+      margin, height - 38, { width: width - margin * 2, align: 'center' }
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Public stream-based generators (single-document)
+// ---------------------------------------------------------------------------
+
+function generateGradesCertificatePDF(stream, studentData, certData) {
+  const doc = new PDFDocument({
+    size: 'letter',
+    layout: 'portrait',
+    margins: { top: 60, bottom: 60, left: 80, right: 80 }
+  });
+  doc.pipe(stream);
+  _renderGradesCertificate(doc, studentData || {}, certData || {});
+  doc.end();
+}
+
+function generateGraduationActPDF(stream, studentData, certData) {
+  const doc = new PDFDocument({
+    size: 'letter',
+    layout: 'portrait',
+    margins: { top: 60, bottom: 60, left: 80, right: 80 }
+  });
+  doc.pipe(stream);
+  _renderGraduationAct(doc, studentData || {}, certData || {});
+  doc.end();
+}
+
+function generateHighSchoolDiplomaPDF(stream, studentData, certData) {
+  const doc = new PDFDocument({
+    size: 'letter',
+    layout: 'portrait',
+    margins: { top: 60, bottom: 30, left: 80, right: 80 }
+  });
+  doc.pipe(stream);
+  _renderHighSchoolDiploma(doc, studentData || {}, certData || {});
+  doc.end();
+}
+
+/**
+ * Renders the full three-document ecosystem into a single multi-page PDF
+ * binary stream (the "packaged" deliverable).
+ *
+ * Page 1 — Certificado de Notas (portrait)
+ * Page 2 — Acta de Grado (portrait)
+ * Page 3 — Diploma de Bachiller (landscape)
+ *
+ * @param {WritableStream} stream
+ * @param {Object} studentData
+ * @param {Object} certData
+ */
+function generateHighSchoolDocumentPackPDF(stream, studentData, certData) {
+  const doc = new PDFDocument({
+    size: 'letter',
+    layout: 'portrait',
+    margins: { top: 60, bottom: 60, left: 80, right: 80 }
+  });
+  doc.pipe(stream);
+
+  // Generate the random grade set once so all pages stay internally consistent.
+  const enriched = { ...(certData || {}), grades: generateBachilleratoGrades(studentData && studentData.cedula) };
+
+  _renderGradesCertificate(doc, studentData || {}, enriched);
+  doc.addPage({ size: 'letter', layout: 'portrait', margins: { top: 60, bottom: 60, left: 80, right: 80 } });
+  _renderGraduationAct(doc, studentData || {}, certData || {});
+  doc.addPage({ size: 'letter', layout: 'portrait', margins: { top: 60, bottom: 30, left: 80, right: 80 } });
+  _renderHighSchoolDiploma(doc, studentData || {}, certData || {});
+
+  doc.end();
+}
+
+/**
+ * Generic helper that materializes any stream-based pdfkit generator into an
+ * in-memory Buffer (used for email attachments). DRY wrapper over the Writable
+ * accumulator pattern.
+ *
+ * @param {Function} generator  stream-based pdfService generator
+ * @param {...*} args           forwarded arguments (studentData, certData, …)
+ * @returns {Promise<Buffer>}
+ */
+function pdfToBuffer(generator, ...args) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, encoding, callback) {
+        chunks.push(chunk);
+        callback();
+      }
+    });
+    stream.on('finish', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+    try {
+      generator(stream, ...args);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
 
 /**
  * Generates the default institutional certificate layout via pdfkit.
@@ -21,12 +865,12 @@ function generateDefaultCertificatePDF(stream, data) {
 
   // 1. Draw outer gold/emerald borders
   doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40)
-     .lineWidth(4)
-     .stroke('#0F2C59'); // Principal Blue
+    .lineWidth(4)
+    .stroke('#0F2C59'); // Principal Blue
 
   doc.rect(28, 28, doc.page.width - 56, doc.page.height - 56)
-     .lineWidth(1.5)
-     .stroke('#D4AF37'); // Gold accent
+    .lineWidth(1.5)
+    .stroke('#D4AF37'); // Gold accent
 
   // 2. Add decorative corners
   doc.rect(24, 24, 20, 20).lineWidth(1).stroke('#D4AF37');
@@ -43,96 +887,96 @@ function generateDefaultCertificatePDF(stream, data) {
   // 4. Header Text
   doc.y = 150;
   doc.fontSize(28)
-     .font('Times-Bold')
-     .fillColor('#0F2C59')
-     .text('CERTIFICADO DE APROBACIÓN', { align: 'center' });
+    .font('Times-Bold')
+    .fillColor('#0F2C59')
+    .text('CERTIFICADO DE APROBACIÓN', { align: 'center' });
 
   doc.moveDown(0.1);
   doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .fillColor('#D4AF37')
-     .text(`REGISTRO N°: ${data.numero_certificado || ''}`, { align: 'center', characterSpacing: 1 });
+    .font('Helvetica-Bold')
+    .fillColor('#D4AF37')
+    .text(`REGISTRO N°: ${data.numero_certificado || ''}`, { align: 'center', characterSpacing: 1 });
 
   doc.moveDown(0.1);
   doc.fontSize(12)
-     .font('Helvetica-Bold')
-     .fillColor('#0F2C59')
-     .text((data.curso_titulo || 'CURSO DE MANIPULACIÓN HIGIÉNICA DE ALIMENTOS').toUpperCase(), { align: 'center', characterSpacing: 1.5 });
+    .font('Helvetica-Bold')
+    .fillColor('#0F2C59')
+    .text((data.curso_titulo || 'CURSO DE MANIPULACIÓN HIGIÉNICA DE ALIMENTOS').toUpperCase(), { align: 'center', characterSpacing: 1.5 });
 
   doc.moveDown(0.8);
   doc.fontSize(13)
-     .font('Helvetica')
-     .fillColor('#475569')
-     .text('Se otorga el presente documento de certificación y participación a:', { align: 'center' });
+    .font('Helvetica')
+    .fillColor('#475569')
+    .text('Se otorga el presente documento de certificación y participación a:', { align: 'center' });
 
   // Student Name
   doc.moveDown(0.6);
   doc.fontSize(28)
-     .font('Helvetica-Bold')
-     .fillColor('#16A34A')
-     .text((data.nombre_completo || '').toUpperCase(), { align: 'center' });
+    .font('Helvetica-Bold')
+    .fillColor('#16A34A')
+    .text((data.nombre_completo || '').toUpperCase(), { align: 'center' });
 
   // Student ID
   doc.moveDown(0.3);
   doc.fontSize(13)
-     .font('Helvetica')
-     .fillColor('#1E293B')
-     .text(`Cédula de Identidad N°: ${data.cedula || ''}`, { align: 'center' });
+    .font('Helvetica')
+    .fillColor('#1E293B')
+    .text(`Cédula de Identidad N°: ${data.cedula || ''}`, { align: 'center' });
 
   // Course Details
   doc.moveDown(0.8);
   doc.fontSize(11)
-     .font('Helvetica')
-     .fillColor('#475569')
-     .text('Por haber cumplido con todos los requisitos académicos del curso y aprobado satisfactoriamente', { align: 'center' });
+    .font('Helvetica')
+    .fillColor('#475569')
+    .text('Por haber cumplido con todos los requisitos académicos del curso y aprobado satisfactoriamente', { align: 'center' });
   doc.text('la evaluación de conocimientos sobre normas higiénico-sanitarias vigentes.', { align: 'center' });
 
   // Hours intensity & Grade
   doc.moveDown(0.5);
   doc.fontSize(10)
-     .font('Helvetica-Oblique')
-     .fillColor('#64748B')
-     .text('Intensidad Horaria: 3 Horas Lectivas', { align: 'center' });
+    .font('Helvetica-Oblique')
+    .fillColor('#64748B')
+    .text('Intensidad Horaria: 3 Horas Lectivas', { align: 'center' });
 
   doc.fontSize(11)
-     .font('Helvetica-Bold')
-     .fillColor('#16A34A')
-     .text(`Calificación Obtenida: ${data.calificacion_obtenida || 0}%`, { align: 'center' });
+    .font('Helvetica-Bold')
+    .fillColor('#16A34A')
+    .text(`Calificación Obtenida: ${data.calificacion_obtenida || 0}%`, { align: 'center' });
 
   // Signatures & Metadata layout
   doc.moveDown(1.0);
   const yStart = doc.y;
 
   doc.fontSize(10)
-     .font('Helvetica-Bold')
-     .fillColor('#475569')
-     .text('Fecha de Emisión:', 100, yStart, { width: 250, align: 'center' });
+    .font('Helvetica-Bold')
+    .fillColor('#475569')
+    .text('Fecha de Emisión:', 100, yStart, { width: 250, align: 'center' });
   doc.fontSize(10)
-     .font('Helvetica')
-     .fillColor('#1E293B')
-     .text(data.fecha_emision || '', 100, yStart + 18, { width: 250, align: 'center' });
+    .font('Helvetica')
+    .fillColor('#1E293B')
+    .text(data.fecha_emision || '', 100, yStart + 18, { width: 250, align: 'center' });
 
   const rightColX = doc.page.width - 350;
   doc.moveTo(rightColX, yStart + 12)
-     .lineTo(rightColX + 250, yStart + 12)
-     .lineWidth(1)
-     .stroke('#94A3B8');
+    .lineTo(rightColX + 250, yStart + 12)
+    .lineWidth(1)
+    .stroke('#94A3B8');
 
   doc.fontSize(10)
-     .font('Helvetica-Bold')
-     .fillColor('#475569')
-     .text('Comité de Calidad y Sanidad', rightColX, yStart + 18, { width: 250, align: 'center' });
+    .font('Helvetica-Bold')
+    .fillColor('#475569')
+    .text('Comité de Calidad y Sanidad', rightColX, yStart + 18, { width: 250, align: 'center' });
   doc.fontSize(9)
-     .font('Helvetica-Oblique')
-     .fillColor('#64748B')
-     .text('Instituto Superior del Norte', rightColX, yStart + 32, { width: 250, align: 'center' });
+    .font('Helvetica-Oblique')
+    .fillColor('#64748B')
+    .text('Instituto Superior del Norte', rightColX, yStart + 32, { width: 250, align: 'center' });
 
   // Footer Verification Metadata
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   doc.fontSize(9)
-     .font('Courier')
-     .fillColor('#64748B')
-     .text(`CÓDIGO DE VERIFICACIÓN: ${data.codigo_verificacion || ''}`, 40, doc.page.height - 65, { align: 'center' });
+    .font('Courier')
+    .fillColor('#64748B')
+    .text(`CÓDIGO DE VERIFICACIÓN: ${data.codigo_verificacion || ''}`, 40, doc.page.height - 65, { align: 'center' });
   doc.text(`Verifique la validez de este certificado en: ${frontendUrl}/#verify=${data.codigo_verificacion || ''}`, 40, doc.page.height - 50, { align: 'center' });
 
   doc.end();
@@ -202,5 +1046,15 @@ async function generateCertificatePDF(stream, data, htmlTemplate = null) {
 module.exports = {
   generateCertificatePDF,
   generateDefaultCertificatePDF,
-  generateHTMLCertificatePDF
+  generateHTMLCertificatePDF,
+  // Bachillerato Académico ecosystem (native pdfkit)
+  generateGradesCertificatePDF,
+  generateGraduationActPDF,
+  generateHighSchoolDiplomaPDF,
+  generateHighSchoolDocumentPackPDF,
+  pdfToBuffer,
+  // Pure domain helpers (centralized per KISS/DRY)
+  generateBachilleratoGrades,
+  mapQualitativeGrade,
+  isHighSchoolCourse
 };

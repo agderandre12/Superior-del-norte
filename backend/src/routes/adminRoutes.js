@@ -17,6 +17,8 @@ router.put('/courses/:id', adminController.updateCourse);
 router.put('/courses/:courseId/modules/:moduleId', adminController.updateCourseModule);
 router.get('/certificate/download', adminController.downloadStudentCertificate);
 router.get('/certificate/download-acta', adminController.downloadStudentActa);
+router.get('/certificate/download-grades', adminController.downloadStudentGrades);
+router.get('/certificate/download-bachiller-pack', adminController.downloadStudentBachillerPack);
 
 
 // Middleware to require engineer software role

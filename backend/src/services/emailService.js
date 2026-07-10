@@ -236,34 +236,43 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
     const recipientEmail = studentData.email || `${studentData.cedula}@institutosuperiordelnorte-student.co`;
 
     const db = require('../repositories/dbRepository');
-    const academicTemplateService = require('./academicTemplateService');
 
     const courses = await db.getCourses();
     const course = courses.find(c => c.id === certData.curso_id);
     const isDirect = course && course.certificacion_directa === 1;
+    const isHighSchool = pdfService.isHighSchoolCourse(course);
 
     let attachments = [];
     let subject = `🎓 ¡Felicitaciones! Tu certificado de "${courseTitle}" está listo`;
     let bodyHtml = '';
 
-    if (isDirect) {
-      subject = `🎓 ¡Felicitaciones! Tu título de Bachiller Académico y Acta de Grado están listos`;
-      
-      const fullUser = await db.getUser(studentData.cedula);
-      const diplomaHtml = academicTemplateService.generateDiplomaTemplate(fullUser, certData, course);
-      const actaHtml = academicTemplateService.generateActaTemplate(fullUser, certData, course);
+    if (isHighSchool) {
+      subject = `🎓 ¡Felicitaciones! Tus documentos oficiales de Bachiller Académico están listos`;
 
-      const diplomaBuffer = await generateCertificatePDFBuffer(certData, diplomaHtml);
-      const actaBuffer = await generateCertificatePDFBuffer(certData, actaHtml);
+      const fullUser = await db.getUser(studentData.cedula);
+      const studentPayload = {
+        nombre_completo: fullUser ? fullUser.nombre_completo : studentData.nombre_completo,
+        cedula: studentData.cedula
+      };
+
+      // Native pdfkit 3-document ecosystem — no Puppeteer dependency.
+      const gradesBuffer = await pdfService.pdfToBuffer(pdfService.generateGradesCertificatePDF, studentPayload, certData);
+      const actaBuffer = await pdfService.pdfToBuffer(pdfService.generateGraduationActPDF, studentPayload, certData);
+      const diplomaBuffer = await pdfService.pdfToBuffer(pdfService.generateHighSchoolDiplomaPDF, studentPayload, certData);
 
       attachments.push({
-        filename: `Diploma_Bachiller_${studentData.cedula}.pdf`,
-        content: diplomaBuffer,
+        filename: `Certificado_de_Notas_${studentData.cedula}.pdf`,
+        content: gradesBuffer,
         contentType: 'application/pdf'
       });
       attachments.push({
         filename: `Acta_de_Grado_${studentData.cedula}.pdf`,
         content: actaBuffer,
+        contentType: 'application/pdf'
+      });
+      attachments.push({
+        filename: `Diploma_Bachiller_${studentData.cedula}.pdf`,
+        content: diplomaBuffer,
         contentType: 'application/pdf'
       });
 
@@ -291,12 +300,12 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
                        Nos complace informarte que has culminado exitosamente los requisitos del programa de
                        <strong style="color:#0F2C59;">"Bachillerato Académico"</strong>.
                     </p>
-                    <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
-                       Se han generado dinámicamente y de manera paralela tus dos documentos oficiales: el <strong>Diploma de Bachiller</strong> y el <strong>Acta de Grado</strong> correspondientes, emitidos en la ciudad de Medellín, Colombia.
-                    </p>
-                    <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
-                      Ambos documentos oficiales en formato PDF se encuentran adjuntos en este correo electrónico. También puedes descargarlos y visualizarlos en tu portal de estudiante en cualquier momento.
-                    </p>
+                     <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
+                       Se han generado dinámicamente y de manera paralela tus tres documentos oficiales: el <strong>Certificado de Notas</strong>, el <strong>Acta de Grado</strong> y el <strong>Diploma de Bachiller</strong> correspondientes, emitidos en la ciudad de Medellín, Colombia.
+                     </p>
+                     <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
+                       Los tres documentos oficiales en formato PDF se encuentran adjuntos en este correo electrónico. También puedes descargarlos y visualizarlos en tu portal de estudiante en cualquier momento.
+                     </p>
                     <!-- Certificate Info -->
                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:2px solid #86efac;border-radius:10px;margin-bottom:28px;">
                       <tr>

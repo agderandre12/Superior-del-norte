@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-import { Users, CheckCircle2, Clock, Plus, UserPlus, RefreshCw, X, ShieldAlert, Award, FileText, Edit, Download } from 'lucide-react';
+import { Users, CheckCircle2, Clock, Plus, UserPlus, RefreshCw, X, ShieldAlert, Award, FileText, Edit, Download, FileCheck } from 'lucide-react';
 
 const decodeMojibake = (str: string | undefined): string | undefined => {
   if (!str) return str;
@@ -185,6 +185,7 @@ const AdminDashboard = () => {
     updateStudentProfile,
     financialMetrics,
     fetchFinancialMetrics,
+    downloadStudentCertificate,
     token,
     API_BASE_URL,
     loading: contextLoading
@@ -981,51 +982,122 @@ const AdminDashboard = () => {
                           const certCourseId = student.certified_courses[0];
                           const certCourse = courses.find(c => c.id === certCourseId);
                           const isDirect = certCourse && certCourse.certificacion_directa === 1;
+                          const isHighSchool = certCourse && certCourse.certificacion_directa === 1 && String(certCourse.titulo || '').toLowerCase().includes('bachiller');
                           
                           return (
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                onClick={() => handleDownloadStudentCertificate(student.cedula, certCourseId)}
-                                style={{
-                                  background: 'rgba(15, 44, 89, 0.05)',
-                                  border: 'none',
-                                  color: 'var(--isn-blue)',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  fontSize: '0.85rem',
-                                  fontWeight: 700,
-                                  padding: '6px 12px',
-                                  borderRadius: '9999px',
-                                  transition: 'background-color 0.15s, color 0.15s'
-                                }}
-                              >
-                                <Download size={14} color="var(--isn-gold)" />
-                                <span>{isDirect ? 'Diploma' : 'Descargar'}</span>
-                              </button>
-                              
-                              {isDirect && (
-                                <button
-                                  onClick={() => handleDownloadStudentActa(student.cedula, certCourseId)}
-                                  style={{
-                                    background: 'rgba(22, 163, 74, 0.05)',
-                                    border: 'none',
-                                    color: 'var(--accent-emerald)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 700,
-                                    padding: '6px 12px',
-                                    borderRadius: '9999px',
-                                    transition: 'background-color 0.15s, color 0.15s'
-                                  }}
-                                >
-                                  <Download size={14} color="var(--accent-emerald)" />
-                                  <span>Acta</span>
-                                </button>
+                              {isHighSchool ? (
+                                <>
+                                  <button
+                                    onClick={() => downloadStudentCertificate(student.cedula, certCourseId, 'notas')}
+                                    title="Descargar Certificado de Notas"
+                                    style={{
+                                      background: 'rgba(15, 44, 89, 0.05)',
+                                      border: 'none',
+                                      color: 'var(--isn-blue)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 700,
+                                      padding: '6px 10px',
+                                      borderRadius: '9999px',
+                                      transition: 'background-color 0.15s, color 0.15s'
+                                    }}
+                                  >
+                                    <FileText size={14} color="var(--isn-blue)" />
+                                    <span>Notas</span>
+                                  </button>
+                                  <button
+                                    onClick={() => downloadStudentCertificate(student.cedula, certCourseId, 'acta')}
+                                    title="Descargar Acta de Grado"
+                                    style={{
+                                      background: 'rgba(22, 163, 74, 0.05)',
+                                      border: 'none',
+                                      color: 'var(--accent-emerald)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 700,
+                                      padding: '6px 10px',
+                                      borderRadius: '9999px',
+                                      transition: 'background-color 0.15s, color 0.15s'
+                                    }}
+                                  >
+                                    <FileCheck size={14} color="var(--accent-emerald)" />
+                                    <span>Acta</span>
+                                  </button>
+                                  <button
+                                    onClick={() => downloadStudentCertificate(student.cedula, certCourseId, 'diploma')}
+                                    title="Descargar Diploma"
+                                    style={{
+                                      background: 'rgba(212, 175, 55, 0.1)',
+                                      border: 'none',
+                                      color: 'var(--isn-gold)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      fontSize: '0.8rem',
+                                      fontWeight: 700,
+                                      padding: '6px 10px',
+                                      borderRadius: '9999px',
+                                      transition: 'background-color 0.15s, color 0.15s'
+                                    }}
+                                  >
+                                    <Award size={14} color="var(--isn-gold)" />
+                                    <span>Diploma</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => downloadStudentCertificate(student.cedula, certCourseId, 'diploma')}
+                                    style={{
+                                      background: 'rgba(15, 44, 89, 0.05)',
+                                      border: 'none',
+                                      color: 'var(--isn-blue)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      fontSize: '0.85rem',
+                                      fontWeight: 700,
+                                      padding: '6px 12px',
+                                      borderRadius: '9999px',
+                                      transition: 'background-color 0.15s, color 0.15s'
+                                    }}
+                                  >
+                                    <Award size={14} color="var(--isn-gold)" />
+                                    <span>{isDirect ? 'Diploma' : 'Descargar'}</span>
+                                  </button>
+                                  
+                                  {isDirect && (
+                                    <button
+                                      onClick={() => downloadStudentCertificate(student.cedula, certCourseId, 'acta')}
+                                      style={{
+                                        background: 'rgba(22, 163, 74, 0.05)',
+                                        border: 'none',
+                                        color: 'var(--accent-emerald)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 700,
+                                        padding: '6px 12px',
+                                        borderRadius: '9999px',
+                                        transition: 'background-color 0.15s, color 0.15s'
+                                      }}
+                                    >
+                                      <FileCheck size={14} color="var(--accent-emerald)" />
+                                      <span>Acta</span>
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           );

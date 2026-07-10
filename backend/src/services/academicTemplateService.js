@@ -323,16 +323,16 @@ function generateDiplomaTemplate(student, cert, course) {
 
         <div class="firmas-container">
           <div class="firma-box">
-            <span class="firma-grafica">A. Gualtero</span>
+            <span class="firma-grafica">S. Cardenas</span>
             <div class="firma-line"></div>
-            <span class="firma-name">Dr. Alberto Heriberto Gualtero</span>
+            <span class="firma-name">STEVEN CARDENAS LEON</span>
             <span class="firma-charge">Rector</span>
           </div>
           
           <div class="firma-box">
-            <span class="firma-grafica">C. Vera M.</span>
+            <span class="firma-grafica">L. Avila</span>
             <div class="firma-line"></div>
-            <span class="firma-name">Dra. Carlos Alberto Vera</span>
+            <span class="firma-name">LUISA FERNANDA AVILA GONZÁLEZ</span>
             <span class="firma-charge">Secretaria Académica</span>
           </div>
         </div>
@@ -571,16 +571,16 @@ function generateActaTemplate(student, cert, course) {
 
       <div class="firmas-area">
         <div class="firma-box">
-          <span class="firma-grafica">A. Gualtero</span>
+          <span class="firma-grafica">S. Cardenas</span>
           <div class="firma-line"></div>
-          <span class="firma-name">Dr. Alberto Heriberto Gualtero</span>
+          <span class="firma-name">STEVEN CARDENAS LEON</span>
           <span class="firma-charge">Rector</span>
         </div>
         
         <div class="firma-box">
-          <span class="firma-grafica">C. Vera M.</span>
+          <span class="firma-grafica">L. Avila</span>
           <div class="firma-line"></div>
-          <span class="firma-name">Dra. Carlos Alberto Vera</span>
+          <span class="firma-name">LUISA FERNANDA AVILA GONZÁLEZ</span>
           <span class="firma-charge">Secretaria Académica</span>
         </div>
       </div>
