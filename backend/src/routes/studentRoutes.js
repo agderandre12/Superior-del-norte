@@ -14,5 +14,7 @@ router.post('/exam/submit', studentController.submitExam);
 router.get('/certificate/detail', studentController.getCertificateDetail);
 router.get('/certificate/download', studentController.downloadCertificate);
 router.get('/certificate/download-acta', studentController.downloadActa);
+router.get('/certificate/download-grades', studentController.downloadGradesCertificate);
+router.get('/certificate/download-bachiller-pack', studentController.downloadBachillerDocumentPack);
 
 module.exports = router;

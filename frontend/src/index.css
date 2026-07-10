@@ -1004,6 +1004,73 @@ h1, h2, h3, h4, h5, h6 {
   nav, footer, .bachiller-panel-side, .bachiller-back-btn { display: none !important; }
 }
 
+/* Premium micro-interactions and utilities */
+.gold-accent-hover:hover {
+  color: var(--isn-gold) !important;
+}
+
+.premium-gold-border {
+  border: 1px solid rgba(212, 175, 55, 0.15) !important;
+}
+
+.premium-gold-border-active {
+  border: 1.5px solid var(--isn-gold) !important;
+}
+
+.whatsapp-float-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  background-color: #25D366;
+  color: white;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.whatsapp-float-btn:hover {
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 12px 32px rgba(37, 211, 102, 0.35);
+}
+
+/* Breath pulse animation for premium floating support */
+@keyframes support-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(37, 211, 102, 0.25);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(37, 211, 102, 0.45);
+  }
+}
+
+.whatsapp-pulse {
+  animation: support-pulse 3s infinite ease-in-out;
+}
+
+/* Fade-in-up layout animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* ==========================================================================
    Premium Redesign Additions (Instituto Superior del Norte)
    ========================================================================== */

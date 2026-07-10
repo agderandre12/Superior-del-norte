@@ -1,5 +1,15 @@
 const db = require('../repositories/dbRepository');
-const { generateCertificatePDF } = require('../services/pdfService');
+const {
+  generateCertificatePDF,
+  generateDefaultCertificatePDF,
+  generateHTMLCertificatePDF,
+  generateGradesCertificatePDF,
+  generateGraduationActPDF,
+  generateHighSchoolDiplomaPDF,
+  generateHighSchoolDocumentPackPDF,
+  pdfToBuffer,
+  isHighSchoolCourse
+} = require('../services/pdfService');
 const { normalizeToUtf8 } = require('../middleware/auth');
 const { sendCertificateEmail } = require('../services/emailService');
 const { interpolateTemplate } = require('../services/certificateTemplateService');
@@ -14,6 +24,20 @@ function generateVerificationCode() {
     r2 += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return `ALIM-${r1}-${r2}`;
+}
+
+/**
+ * Resolves the active course id from the query string, falling back to the
+ * student's first enrolled course when absent. DRY helper shared by the
+ * download endpoints.
+ */
+async function resolveCourseId(cedula, queryCourseId) {
+  let courseId = parseInt(queryCourseId);
+  if (!courseId) {
+    const studentCourses = await db.getStudentCourses(cedula);
+    courseId = (studentCourses && studentCourses.length > 0) ? studentCourses[0].id : 1;
+  }
+  return courseId;
 }
 
 async function getStudentCourses(req, res, next) {
@@ -177,19 +201,36 @@ async function submitExam(req, res, next) {
     const results = await db.submitExam(req.user.cedula, score, approved, courseId);
 
     if (approved) {
+      const courses = await db.getCourses();
+      const course = courses.find(c => c.id === courseId);
+      const courseTitle = course ? course.titulo : 'Manipulación de Alimentos';
+
       let cert = await db.getCertificateByCedula(req.user.cedula, courseId);
       if (!cert) {
         const code = generateVerificationCode();
         const count = await db.getCertificatesCount();
         const nextNum = count + 1;
         const numeroCert = `AS-2026-${String(nextNum).padStart(4, '0')}`;
-        cert = await db.createCertificate(req.user.cedula, code, score, numeroCert, courseId);
+
+        let fechaEmision;
+        const esBachillerato = course && (
+          String(course.titulo || '').toLowerCase().includes('bachiller') || 
+          course.certificacion_directa === 1
+        );
+
+        if (esBachillerato) {
+          fechaEmision = db.getRandomDateFrom2020ToPresent();
+        } else {
+          const hoy = new Date();
+          const year = hoy.getFullYear();
+          const month = String(hoy.getMonth() + 1).padStart(2, '0');
+          const day = String(hoy.getDate()).padStart(2, '0');
+          fechaEmision = `${year}-${month}-${day}`;
+        }
+
+        cert = await db.createCertificate(req.user.cedula, code, score, numeroCert, courseId, fechaEmision);
       }
 
-      // Obtener información del curso para el email
-      const courses = await db.getCourses();
-      const course = courses.find(c => c.id === courseId);
-      const courseTitle = course ? course.titulo : 'Manipulación de Alimentos';
       const fullUser = await db.getUser(req.user.cedula);
       const htmlTemplate = course && course.certificado_template
         ? interpolateTemplate(course.certificado_template, fullUser, cert, course)
@@ -284,30 +325,50 @@ async function downloadCertificate(req, res, next) {
     const courseTitle = course ? course.titulo : 'Manipulación de Alimentos';
 
     const fullUser = await db.getUser(req.user.cedula);
-    
-    let htmlTemplate = null;
-    if (course && course.certificacion_directa === 1) {
-      htmlTemplate = academicTemplateService.generateDiplomaTemplate(fullUser, cert, course);
+
+    // Bachillerato Académico → native pdfkit diploma (replaces the generic
+    // alimentos / Puppeteer template path).
+    let buffer;
+    let filename = `Certificado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`;
+
+    // Bachillerato Académico → native pdfkit diploma (replaces the generic
+    // alimentos / Puppeteer template path).
+    if (isHighSchoolCourse(course)) {
+      filename = `Diploma_Bachiller_${req.user.cedula}.pdf`;
+      buffer = await pdfToBuffer(generateHighSchoolDiplomaPDF, {
+        nombre_completo: normalizeToUtf8(req.user.nombre_completo),
+        cedula: req.user.cedula
+      }, cert);
     } else {
-      htmlTemplate = course && course.certificado_template
-        ? interpolateTemplate(course.certificado_template, fullUser, cert, course)
-        : null;
+      let htmlTemplate = null;
+      if (course && course.certificacion_directa === 1) {
+        htmlTemplate = academicTemplateService.generateDiplomaTemplate(fullUser, cert, course);
+      } else {
+        htmlTemplate = course && course.certificado_template
+          ? interpolateTemplate(course.certificado_template, fullUser, cert, course)
+          : null;
+      }
+
+      const pdfData = {
+        nombre_completo: normalizeToUtf8(req.user.nombre_completo),
+        cedula: req.user.cedula,
+        fecha_emision: cert.fecha_emision,
+        codigo_verificacion: cert.codigo_verificacion,
+        calificacion_obtenida: cert.calificacion_obtenida,
+        numero_certificado: cert.numero_certificado,
+        curso_titulo: courseTitle
+      };
+
+      if (htmlTemplate) {
+        buffer = await generateHTMLCertificatePDF(htmlTemplate);
+      } else {
+        buffer = await pdfToBuffer(generateDefaultCertificatePDF, pdfData);
+      }
     }
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Certificado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`);
-
-    const pdfData = {
-      nombre_completo: normalizeToUtf8(req.user.nombre_completo),
-      cedula: req.user.cedula,
-      fecha_emision: cert.fecha_emision,
-      codigo_verificacion: cert.codigo_verificacion,
-      calificacion_obtenida: cert.calificacion_obtenida,
-      numero_certificado: cert.numero_certificado,
-      curso_titulo: courseTitle
-    };
-
-    await generateCertificatePDF(res, pdfData, htmlTemplate);
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
@@ -336,14 +397,92 @@ async function downloadActa(req, res, next) {
       return res.status(400).json({ error: 'Este curso no cuenta con acta de grado.' });
     }
 
-    const courseTitle = course.titulo;
-    const fullUser = await db.getUser(req.user.cedula);
-    const htmlTemplate = academicTemplateService.generateActaTemplate(fullUser, cert, course);
+    let buffer;
+    let filename;
+
+    // Bachillerato Académico → native pdfkit acta generator.
+    if (isHighSchoolCourse(course)) {
+      filename = `Acta_de_Grado_${req.user.cedula}.pdf`;
+      buffer = await pdfToBuffer(generateGraduationActPDF, {
+        nombre_completo: normalizeToUtf8(req.user.nombre_completo),
+        cedula: req.user.cedula
+      }, cert);
+    } else {
+      const courseTitle = course.titulo;
+      filename = `Acta_de_Grado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`;
+      const fullUser = await db.getUser(req.user.cedula);
+      const htmlTemplate = academicTemplateService.generateActaTemplate(fullUser, cert, course);
+      buffer = await generateHTMLCertificatePDF(htmlTemplate);
+    }
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Acta_de_Grado_${courseTitle.replace(/\s+/g, '_')}_${req.user.cedula}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
 
-    await generateCertificatePDF(res, {}, htmlTemplate);
+/**
+ * Downloads the Certificado de Notas (CLEI VI) for a Bachillerato Académico
+ * course. Grades are generated dynamically per the centralized pure function.
+ */
+async function downloadGradesCertificate(req, res, next) {
+  try {
+    const courseId = await resolveCourseId(req.user.cedula, req.query.courseId);
+
+    const cert = await db.getCertificateByCedula(req.user.cedula, courseId);
+    if (!cert) {
+      return res.status(400).json({ error: 'Debe completar y aprobar la certificación para descargar su certificado de notas.' });
+    }
+
+    const courses = await db.getCourses();
+    const course = courses.find(c => c.id === courseId);
+    if (!isHighSchoolCourse(course)) {
+      return res.status(400).json({ error: 'El certificado de notas está disponible únicamente para el programa de Bachillerato Académico.' });
+    }
+
+    const buffer = await pdfToBuffer(generateGradesCertificatePDF, {
+      nombre_completo: normalizeToUtf8(req.user.nombre_completo),
+      cedula: req.user.cedula
+    }, cert);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Certificado_de_Notas_${req.user.cedula}.pdf`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Downloads the complete Bachillerato Académico document ecosystem
+ * (Certificado de Notas + Acta de Grado + Diploma) packaged as a single
+ * multi-page PDF binary stream.
+ */
+async function downloadBachillerDocumentPack(req, res, next) {
+  try {
+    const courseId = await resolveCourseId(req.user.cedula, req.query.courseId);
+
+    const cert = await db.getCertificateByCedula(req.user.cedula, courseId);
+    if (!cert) {
+      return res.status(400).json({ error: 'Debe completar y aprobar la certificación para descargar sus documentos oficiales.' });
+    }
+
+    const courses = await db.getCourses();
+    const course = courses.find(c => c.id === courseId);
+    if (!isHighSchoolCourse(course)) {
+      return res.status(400).json({ error: 'El paquete documental está disponible únicamente para el programa de Bachillerato Académico.' });
+    }
+
+    const buffer = await pdfToBuffer(generateHighSchoolDocumentPackPDF, {
+      nombre_completo: normalizeToUtf8(req.user.nombre_completo),
+      cedula: req.user.cedula
+    }, cert);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Documentos_Bachiller_${req.user.cedula}.pdf`);
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
@@ -358,5 +497,7 @@ module.exports = {
   submitExam,
   getCertificateDetail,
   downloadCertificate,
-  downloadActa
+  downloadActa,
+  downloadGradesCertificate,
+  downloadBachillerDocumentPack
 };

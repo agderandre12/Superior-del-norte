@@ -318,6 +318,41 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
+  const downloadStudentCertificate = useCallback(async (studentCedula: string, courseId: number, type: 'notas' | 'acta' | 'diploma') => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/certificate/download?cedula=${studentCedula}&courseId=${courseId}&type=${type}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'No se pudo descargar el documento');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      let filename = `Documento_${type}_${studentCedula}.pdf`;
+      const contentDisposition = response.headers.get('content-disposition');
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename=(.+)/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/["']/g, '');
+        }
+      }
+      
+      a.target = '_blank';
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }, [token, API_BASE_URL]);
+
   const fetchAdminMetrics = useCallback(async () => {
     if (!token) return;
     try {
@@ -585,6 +620,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       submitExam,
       downloadCertificate,
       downloadActa,
+      downloadStudentCertificate,
       adminMetrics,
       adminUsers,
       courses,
