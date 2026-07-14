@@ -151,49 +151,24 @@ function extractDegreeSeq(numeroCertificado) {
  * @param {number} y          baseline anchor y
  * @param {number} scale      uniform scale applied to the 170×60 unit glyph
  */
-function drawSignature(doc, variant, x, y, scale = 0.5) {
-  doc.save();
-  doc.translate(x, y);
-  doc.scale(scale);
-  doc.lineCap('round').lineJoin('round');
-  doc.strokeColor(ISN_INK);
-  doc.opacity(0.9);
-  doc.lineWidth(1.5);
-
-  if (variant === 'rector') {
-    doc.moveTo(0, 32)
-      .bezierCurveTo(10, 8, 24, 8, 32, 28)
-      .bezierCurveTo(38, 42, 46, 42, 54, 24)
-      .bezierCurveTo(62, 8, 76, 10, 84, 32)
-      .bezierCurveTo(90, 46, 98, 46, 106, 26)
-      .bezierCurveTo(114, 12, 126, 14, 132, 32)
-      .bezierCurveTo(138, 40, 146, 40, 152, 26)
-      .bezierCurveTo(156, 20, 166, 24, 160, 33)
-      .stroke();
-    doc.moveTo(4, 45)
-      .quadraticCurveTo(80, 56, 164, 46)
-      .stroke();
-    doc.moveTo(150, 46)
-      .bezierCurveTo(156, 50, 162, 48, 162, 42)
-      .stroke();
-  } else {
-    doc.moveTo(0, 30)
-      .bezierCurveTo(12, 10, 28, 10, 36, 28)
-      .bezierCurveTo(44, 44, 54, 44, 62, 26)
-      .bezierCurveTo(70, 10, 84, 12, 90, 30)
-      .bezierCurveTo(96, 42, 104, 42, 110, 26)
-      .bezierCurveTo(118, 14, 128, 16, 134, 34)
-      .bezierCurveTo(140, 42, 148, 42, 154, 26)
-      .stroke();
-    doc.moveTo(6, 44)
-      .quadraticCurveTo(75, 52, 130, 43)
-      .stroke();
-    doc.moveTo(24, 49)
-      .quadraticCurveTo(64, 54, 110, 47)
-      .stroke();
+function drawSignature(doc, variant, x, y, scale = 1.0) {
+  const filename = variant === 'rector' ? 'firma1.png' : 'firma2.png';
+  const imgPath = getAssetPath(filename);
+  if (!imgPath) {
+    console.warn(`Signature asset not found: ${filename}`);
+    return;
   }
 
-  doc.restore();
+  // Set design bounding box for the signature images.
+  // Increased by ~33% to 160 x 60 for an impressive and readable rendering.
+  const targetWidth = 160 * scale;
+  const targetHeight = 60 * scale;
+
+  doc.image(imgPath, x, y, {
+    fit: [targetWidth, targetHeight],
+    align: 'center',
+    valign: 'bottom'
+  });
 }
 
 /**
@@ -208,16 +183,13 @@ function drawSignature(doc, variant, x, y, scale = 0.5) {
  * @param {number} lineY       y of the solid signature rule
  */
 function renderSignatureBlock(doc, variant, authority, x, width, lineY) {
-  doc.save();
-  const fontPath = getAssetPath('GreatVibes-Regular.ttf');
-  if (fontPath) {
-    doc.registerFont('SignatureFont', fontPath);
-    doc.font('SignatureFont').fontSize(10).fillColor(ISN_BLUE);
-  } else {
-    doc.font('Times-Italic').fontSize(10).fillColor(ISN_BLUE);
-  }
-  doc.text(authority.nombre, x, lineY - 20, { width, align: 'center' });
-  doc.restore();
+  // Draw the real signature image centered above the signature line
+  const sigW = 160;
+  const sigH = 60;
+  const sigX = x + (width - sigW) / 2;
+  const sigY = lineY - sigH - 5; // sitting 5 units above the line to prevent collision
+
+  drawSignature(doc, variant, sigX, sigY, 1.0);
 
   doc.moveTo(x, lineY).lineTo(x + width, lineY)
     .lineWidth(1).strokeColor('#94A3B8').stroke();
@@ -383,14 +355,19 @@ function renderHighSchoolHeader(doc) {
   doc.y = 135;
   doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(7.5)
     .text('REPÚBLICA DE COLOMBIA', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 1 });
+  
+  // Short and subtle spacing after REPÚBLICA DE COLOMBIA
+  doc.y = 147;
   doc.font('Helvetica').fontSize(7)
-    .text('MINISTERIO DE EDUCACIÓN NACIONAL', margin, doc.y + 10, { width: width - margin * 5, align: 'center', characterSpacing: 0.5 });
+    .text('MINISTERIO DE EDUCACIÓN NACIONAL', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 0.5 });
 
-  doc.y = 157;
+  // Wider margin-bottom before INSTITUTO SUPERIOR DEL NORTE
+  doc.y = 168;
   doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(14)
     .text('INSTITUTO SUPERIOR DEL NORTE', margin, doc.y, { width: width - margin * 2, align: 'center' });
 
-  doc.moveDown(0.25);
+  // Resolution below
+  doc.y = 188;
   doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(7.5)
     .text('Resolución N° 10-50-2373 — Secretaría de Educación Municipal de Medellín', margin, doc.y, { width: width - margin * 2, align: 'center' });
 }
@@ -457,7 +434,8 @@ function _renderGradesCertificate(doc, studentData, certData) {
   doc.fillColor(ISN_GOLD).font('Helvetica-Bold').fontSize(10)
     .text('CLEI VI  ·  GRADO 11°', margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 2 });
 
-  doc.moveDown(1.5);
+  // 1. Reduced intro margin from 1.5 to 0.8
+  doc.moveDown(0.8);
   const textoCertifica = `El suscrito Rector del Instituto Superior del Norte, certifica que el(la) estudiante ${String(studentData.nombre_completo || '').toUpperCase()}, identificado(a) con Cédula de Ciudadanía N° ${studentData.cedula || ''}, cursó y aprobó las áreas obligatorias del conocimiento correspondientes al Ciclo Lectivo Especial Integrado (CLEI VI), equivalente al grado undécimo (11°) de Educación Media Académica.`;
   doc.fillColor('#1E293B')
     .font('Helvetica')
@@ -470,7 +448,8 @@ function _renderGradesCertificate(doc, studentData, certData) {
   const headers = ['ÁREAS', 'I.H.S', 'DESEMPEÑO CUANTITATIVO', 'DESEMPEÑO CUALITATIVO'];
   const grades = (certData && certData.grades) ? certData.grades : generateBachilleratoGrades(studentData && studentData.cedula);
   const rows = grades.map((g) => [g.area, g.ihs === null ? '—' : String(g.ihs), g.cuantitativo, g.cualitativo]);
-  const tableBottom = drawGradesTable(doc, tableX, doc.y, colWidths, headers, rows, 22);
+  // 2. Compacted table row height from 22 to 18
+  const tableBottom = drawGradesTable(doc, tableX, doc.y, colWidths, headers, rows, 18);
 
   // Promotion concept badge
   doc.y = tableBottom;
@@ -483,7 +462,8 @@ function _renderGradesCertificate(doc, studentData, certData) {
     .text('CONCEPTO DE PROMOCIÓN: APROBADO', badgeX, doc.y + 8, { width: badgeW, align: 'center' });
 
   doc.y += 26;
-  doc.moveDown(1.5);
+  // 3. Reduced margin before scale from 1.5 to 0.6
+  doc.moveDown(0.6);
   doc.fillColor(ISN_GREY_TEXT).font('Helvetica-Oblique').fontSize(8)
     .text(
       'Escala Nacional de Valoración:  BÁSICO (3.0 – 3.9)   ·   ALTO (4.0 – 4.5)   ·   SUPERIOR (4.6 – 5.0).   ' +
@@ -491,22 +471,27 @@ function _renderGradesCertificate(doc, studentData, certData) {
       margin, doc.y, { width: width - margin * 2, align: 'center' }
     );
 
-  // Rector signature (centered)
+  // 4. Anchored bottom section (signature block, date, verification code)
   const { day, month, year } = formatSpanishDate(certData && certData.fecha_emision);
   const sigW = 280;
   const sigX = (width - sigW) / 2;
-  const sigLineY = doc.page.height - 130;
+  const sigLineY = doc.page.height - 125;
   renderSignatureBlock(doc, 'rector', RECTOR, sigX, sigW, sigLineY);
 
+  // Date of issue (anchored)
+  const dateY = doc.page.height - 75;
   doc.fillColor(ISN_GREY_TEXT).font('Helvetica').fontSize(9)
     .text(
       `Se expide en la ciudad de Medellín, Colombia${day ? `, a los ${day} días del mes de ${month} de ${year}` : ''}.`,
-      margin, doc.page.height - 80, { width: width - margin * 2, align: 'center' }
+      margin, dateY, { width: width - margin * 2, align: 'center' }
     );
+
+  // Verification Code (anchored lower to force it strictly onto the first page)
+  const codeY = doc.page.height - 45;
   doc.fillColor('#64748B').font('Courier').fontSize(7.5)
     .text(
       `Código de Verificación: ${certData && certData.codigo_verificacion ? certData.codigo_verificacion : ''}`,
-      margin, doc.page.height - 60, { width: width - margin * 2, align: 'center' }
+      margin, codeY, { width: width - margin * 2, align: 'center' }
     );
 }
 
@@ -532,16 +517,15 @@ function _renderGraduationAct(doc, studentData, certData) {
   renderWatermarkEscudo(doc);
 
   // Separator line below header
-  doc.moveTo(margin, 172).lineTo(width - margin, 172).lineWidth(1.5).stroke(ISN_BLUE);
 
-  doc.y = 182;
+  doc.y = 210;
   doc.fillColor(ISN_BLUE).font('Times-Bold').fontSize(13)
     .text(`ACTA GENERAL DE GRADUACIÓN N° ${seq}`,
       margin, doc.y, { width: width - margin * 2, align: 'center', characterSpacing: 1.5 });
 
   const bodyOpts = { width: width - margin * 2, align: 'center', lineGap: 3 };
 
-  doc.y = 205;
+  doc.y = 235;
   doc.fillColor('#1E293B').font('Helvetica').fontSize(9);
   doc.text(
     `En la ciudad de Medellín, departamento de Antioquia, República de Colombia${day ? `, a los ${day} días del mes de ${month} de ${year}` : ''}, ` +
