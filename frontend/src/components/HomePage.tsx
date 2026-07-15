@@ -230,7 +230,7 @@ export default function HomePage() {
               Formación superior para el mundo real
             </h2>
             <p style={{ fontSize: '1.15rem', color: 'var(--isn-charcoal)', lineHeight: '1.6', marginBottom: '36px' }}>
-              Capacítate bajo estándares oficiales del Instituto Superior del Norte. Desarrolla las competencias obligatorias y certifica tus conocimientos en manipulación higiénica de alimentos con validez curricular nacional.
+              Capacítate bajo estándares oficiales del Instituto Superior del Norte. Desarrolla las competencias obligatorias y certifica tus conocimientos con validez curricular nacional.
             </p>
             <div style={{ display: 'flex', gap: '16px' }}>
               <button
