@@ -214,11 +214,17 @@ async function submitExam(req, res, next) {
 
         let fechaEmision;
         const esBachillerato = course && (
-          String(course.titulo || '').toLowerCase().includes('bachiller') || 
+          String(course.titulo || '').toLowerCase().includes('bachiller') ||
           course.certificacion_directa === 1
         );
 
-        if (esBachillerato) {
+        // The explicit issue date captured at enrollment (if any) takes
+        // precedence over the auto-generated one, so administrators keep control
+        // of the certificate date even on the deferred exam-completion path.
+        const enrolledUser = await db.getUser(req.user.cedula);
+        if (enrolledUser && enrolledUser.fecha_emision_certificado) {
+          fechaEmision = enrolledUser.fecha_emision_certificado;
+        } else if (esBachillerato) {
           fechaEmision = db.getRandomDateFrom2020ToPresent();
         } else {
           const hoy = new Date();
@@ -356,7 +362,8 @@ async function downloadCertificate(req, res, next) {
         codigo_verificacion: cert.codigo_verificacion,
         calificacion_obtenida: cert.calificacion_obtenida,
         numero_certificado: cert.numero_certificado,
-        curso_titulo: courseTitle
+        curso_titulo: courseTitle,
+        certificado_logro: (course && course.certificado_logro) || null
       };
 
       if (htmlTemplate) {

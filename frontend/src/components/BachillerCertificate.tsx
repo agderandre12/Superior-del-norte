@@ -29,6 +29,10 @@ const formatSpanishDate = (iso: string) => {
   return { day: d.getDate(), month: SPANISH_MONTHS[d.getMonth()], year: d.getFullYear() };
 };
 
+// Institutional default expedition place (fallback for legacy records only).
+const INSTITUTION_MUNICIPIO = 'Medellín';
+const INSTITUTION_DEPARTAMENTO = 'Antioquia';
+
 // Decorative formal emblem standing in for the Escudo de la República de Colombia
 // (the raster asset lives only on the backend; this keeps the frontend self-contained).
 const ColombiaCrest: React.FC<{ size?: number }> = ({ size = 64 }) => (
@@ -76,6 +80,11 @@ const BachillerCertificate: React.FC<BachillerCertificateProps> = ({ courseTitle
   const certSeq = numeroCert.replace('AS-2026-', '') || '0001';
   const { day, month, year } = formatSpanishDate(certData?.fecha_emision);
 
+  // Municipio y Departamento de expedición (capturados en la matrícula);
+  // con respaldo institucional para registros históricos.
+  const ciudad = certData?.ciudad_expedicion || INSTITUTION_MUNICIPIO;
+  const departamento = certData?.departamento_expedicion || INSTITUTION_DEPARTAMENTO;
+
   // Public verification URL (HashRouter → /#/verify/<code>)
   const verifyUrl = `${window.location.origin}/#/verify/${encodeURIComponent(codigo)}`;
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=2&data=${encodeURIComponent(verifyUrl)}`;
@@ -122,7 +131,7 @@ const BachillerCertificate: React.FC<BachillerCertificateProps> = ({ courseTitle
 
             <h3 className="bachiller-republic">REPÚBLICA DE COLOMBIA</h3>
             <h1 className="bachiller-inst">Instituto Superior del Norte</h1>
-            <p className="bachiller-resolution">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE MEDELLÍN</p>
+            <p className="bachiller-resolution">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE {ciudad.toUpperCase()}</p>
 
             <h2 className="bachiller-confiere">Confiere a:</h2>
             <h1 className="bachiller-student-name">{studentName}</h1>
@@ -134,6 +143,8 @@ const BachillerCertificate: React.FC<BachillerCertificateProps> = ({ courseTitle
             <p className="bachiller-legal">
               Por haber cursado y aprobado la totalidad de los estudios correspondientes al nivel de Educación Media Académica,
               según los planes de estudio y programas vigentes de la institución y autorizados por el Ministerio de Educación Nacional.
+              En constancia de ello, el presente título queda inscrito bajo el Acta de Graduación N° {certSeq}, Folio N° {certSeq}
+              y Registro N° {numeroCert} del libro oficial de diplomas de la institución.
             </p>
 
             <div className="bachiller-firmas">
@@ -152,7 +163,7 @@ const BachillerCertificate: React.FC<BachillerCertificateProps> = ({ courseTitle
             </div>
 
             <p className="bachiller-fecha">
-              Dado en la ciudad de Medellín, Colombia, a los {day} días del mes de {month} de {year}
+              Dado en la ciudad de {ciudad}, departamento de {departamento}, Colombia, a los {day} días del mes de {month} de {year}
             </p>
           </div>
         </div>
@@ -165,25 +176,6 @@ const BachillerCertificate: React.FC<BachillerCertificateProps> = ({ courseTitle
             <p className="bachiller-side-sub">
               {courseTitle || 'Título de Educación Media Académica'} — Documento de carácter oficial amparado por el Ministerio de Educación Nacional.
             </p>
-          </div>
-
-          <div className="bachiller-meta-grid">
-            <div className="bachiller-meta-card">
-              <div className="label">Acta No.</div>
-              <div className="value">{certSeq}</div>
-            </div>
-            <div className="bachiller-meta-card">
-              <div className="label">Folio No.</div>
-              <div className="value">{certSeq}</div>
-            </div>
-            <div className="bachiller-meta-card">
-              <div className="label">Registro</div>
-              <div className="value">{numeroCert}</div>
-            </div>
-            <div className="bachiller-meta-card">
-              <div className="label">Calificación</div>
-              <div className="value">{certData?.calificacion_obtenida != null ? `${certData.calificacion_obtenida}%` : '100%'}</div>
-            </div>
           </div>
 
           <div className="bachiller-qr-wrap">

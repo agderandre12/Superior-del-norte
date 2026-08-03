@@ -38,7 +38,7 @@ async function getCoursesList(req, res, next) {
 }
 
 async function createCourse(req, res, next) {
-  const { titulo, descripcion, imagen_url, modulos, precio, certificado_template } = req.body;
+  const { titulo, descripcion, imagen_url, modulos, precio, certificado_template, certificado_logro } = req.body;
 
   if (!titulo || !titulo.trim()) {
     return res.status(400).json({ error: 'El título del curso es requerido.' });
@@ -73,6 +73,7 @@ async function createCourse(req, res, next) {
       imagen_url: imagen_url || '',
       precio: parsedPrecio,
       certificado_template: certificado_template || '',
+      certificado_logro: certificado_logro ? normalizeToUtf8(certificado_logro) : null,
       modulos: modulos.map(m => ({
         titulo_modulo: normalizeToUtf8(m.titulo_modulo),
         tipo_contenido: m.tipo_contenido,
@@ -100,28 +101,39 @@ async function getMetrics(req, res, next) {
 
 async function getUsers(req, res, next) {
   const { cedula } = req.query;
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 7;
   try {
-    const users = await db.getAdminUsers(cedula);
-    const normalizedUsers = users.map(u => ({
+    const result = await db.getAdminUsers(cedula, page, limit);
+    const normalizedUsers = result.users.map(u => ({
       ...u,
       nombre_completo: normalizeToUtf8(u.nombre_completo)
     }));
-    res.json(normalizedUsers);
+    res.json({
+      users: normalizedUsers,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages
+    });
   } catch (err) {
     next(err);
   }
 }
 
 async function createStudent(req, res, next) {
-  const { 
-    cedula, 
-    nombre_completo, 
-    password, 
+  const {
+    cedula,
+    nombre_completo,
+    password,
     cursos,
     fecha_expedicion_cedula,
     municipio_expedicion_cedula,
     municipio_nacimiento,
     anio_nacimiento,
+    departamento_expedicion,
+    ciudad_expedicion,
+    fecha_emision_certificado,
     pago_realizado,
     certificar_inmediatamente,
     email,
@@ -170,6 +182,20 @@ async function createStudent(req, res, next) {
       return res.status(400).json({ error: 'Un usuario con esta cédula ya se encuentra registrado.' });
     }
 
+    // Bachillerato diplomas print an explicit expedition place and issue date.
+    // These become mandatory only when at least one selected course is the
+    // Bachillerato Académico program; other courses keep the fields optional.
+    const allCourses = await db.getCourses();
+    const enrollsInBachillerato = (cursos || []).some((id) => {
+      const c = allCourses.find((x) => x.id === parseInt(id, 10));
+      return c && String(c.titulo || '').toLowerCase().includes('bachiller');
+    });
+    if (enrollsInBachillerato && (!departamento_expedicion || !ciudad_expedicion || !fecha_emision_certificado)) {
+      return res.status(400).json({
+        error: 'Para el Bachillerato Académico, el departamento de expedición, la ciudad de expedición y la fecha de emisión del certificado son requeridos.'
+      });
+    }
+
     const cleanNombre = normalizeToUtf8(nombre_completo);
     const { user: newUser, certificates } = await db.createStudentWithEnrollment({
       cedula,
@@ -180,6 +206,9 @@ async function createStudent(req, res, next) {
         municipio_expedicion_cedula: normalizeToUtf8(municipio_expedicion_cedula),
         municipio_nacimiento: normalizeToUtf8(municipio_nacimiento),
         anio_nacimiento: parseInt(anio_nacimiento),
+        departamento_expedicion: departamento_expedicion ? normalizeToUtf8(departamento_expedicion) : null,
+        ciudad_expedicion: ciudad_expedicion ? normalizeToUtf8(ciudad_expedicion) : null,
+        fecha_emision_certificado: fecha_emision_certificado || null,
         pago_realizado: pago_realizado ? 1 : 0,
         email: cleanEmail,
         vipass: isVip ? 1 : 0
@@ -249,6 +278,9 @@ async function createStudent(req, res, next) {
         municipio_expedicion_cedula: newUser.municipio_expedicion_cedula,
         municipio_nacimiento: newUser.municipio_nacimiento,
         anio_nacimiento: newUser.anio_nacimiento,
+        departamento_expedicion: newUser.departamento_expedicion || null,
+        ciudad_expedicion: newUser.ciudad_expedicion || null,
+        fecha_emision_certificado: newUser.fecha_emision_certificado || null,
         pago_realizado: newUser.pago_realizado,
         email: newUser.email || null,
         vipass: newUser.vipass || 0
@@ -363,7 +395,8 @@ async function downloadStudentCertificate(req, res, next) {
             codigo_verificacion: cert.codigo_verificacion,
             calificacion_obtenida: cert.calificacion_obtenida,
             numero_certificado: cert.numero_certificado,
-            curso_titulo: courseTitle
+            curso_titulo: courseTitle,
+            certificado_logro: course.certificado_logro || null
           };
 
           if (htmlTemplate) {
@@ -520,7 +553,7 @@ async function downloadStudentBachillerPack(req, res, next) {
 
 async function updateCourse(req, res, next) {
   const id = parseInt(req.params.id);
-  const { titulo, descripcion, precio, certificado_template } = req.body;
+  const { titulo, descripcion, precio, certificado_template, certificado_logro } = req.body;
 
   if (isNaN(id)) {
     return res.status(400).json({ error: 'El ID del curso debe ser un número válido.' });
@@ -546,12 +579,19 @@ async function updateCourse(req, res, next) {
       return res.status(404).json({ error: 'El curso no existe.' });
     }
 
-    const updated = await db.updateCourse(id, {
+    const coursePayload = {
       titulo: normalizeToUtf8(titulo),
       descripcion: normalizeToUtf8(descripcion || ''),
       precio: parsedPrecio,
       certificado_template: certificado_template || ''
-    });
+    };
+    // Only forward certificado_logro when the client actually sent it, so a
+    // partial edit never clears an existing dynamic achievement text.
+    if (certificado_logro !== undefined) {
+      coursePayload.certificado_logro = certificado_logro ? normalizeToUtf8(certificado_logro) : null;
+    }
+
+    const updated = await db.updateCourse(id, coursePayload);
 
     res.json({
       message: 'Curso actualizado con éxito.',
@@ -607,6 +647,9 @@ async function updateStudentProfile(req, res, next) {
     municipio_expedicion_cedula,
     municipio_nacimiento,
     anio_nacimiento,
+    departamento_expedicion,
+    ciudad_expedicion,
+    fecha_emision_certificado,
     pago_realizado
   } = req.body;
 
@@ -656,6 +699,9 @@ async function updateStudentProfile(req, res, next) {
       municipio_expedicion_cedula: normalizeToUtf8(municipio_expedicion_cedula),
       municipio_nacimiento: normalizeToUtf8(municipio_nacimiento),
       anio_nacimiento: parsedAnio,
+      departamento_expedicion: departamento_expedicion ? normalizeToUtf8(departamento_expedicion) : null,
+      ciudad_expedicion: ciudad_expedicion ? normalizeToUtf8(ciudad_expedicion) : null,
+      fecha_emision_certificado: fecha_emision_certificado || null,
       pago_realizado: pago_realizado ? 1 : 0
     });
 

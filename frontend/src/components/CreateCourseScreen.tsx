@@ -14,6 +14,7 @@ const CreateCourseScreen = () => {
   const [imageError, setImageError] = useState(false);
   const [precio, setPrecio] = useState('');
   const [certificadoTemplate, setCertificadoTemplate] = useState('');
+  const [certificadoLogro, setCertificadoLogro] = useState('');
 
   // Modules list state
   const [modulos, setModulos] = useState([
@@ -128,6 +129,7 @@ const CreateCourseScreen = () => {
       imagen_url: imagenUrl.trim(),
       precio: parseFloat(precio),
       certificado_template: certificadoTemplate,
+      certificado_logro: certificadoLogro.trim(),
       modulos: modulos.map(m => ({
         titulo_modulo: m.titulo_modulo.trim(),
         tipo_contenido: m.tipo_contenido,
@@ -305,6 +307,23 @@ const CreateCourseScreen = () => {
               />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
                 Utiliza una URL directa de imagen (.jpg, .png, etc.). Puedes usar Unsplash para imágenes profesionales de prueba.
+              </span>
+            </div>
+
+            {/* Certificate achievement text (dynamic per-course) */}
+            <div className="input-group">
+              <label className="input-label" htmlFor="course-logro">Texto de Logro del Certificado</label>
+              <textarea
+                id="course-logro"
+                placeholder="Ej. Por haber aprobado satisfactoriamente la evaluación de conocimientos en primeros auxilios básicos y RCP."
+                className="input-field"
+                style={{ minHeight: '80px', resize: 'vertical' }}
+                value={certificadoLogro}
+                onChange={(e) => setCertificadoLogro(e.target.value)}
+                disabled={submitting}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                Texto dinámico impreso en el certificado del curso. Si se deja vacío, se usa un texto genérico (no específico de higiene de alimentos).
               </span>
             </div>
 

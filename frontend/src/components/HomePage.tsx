@@ -224,15 +224,19 @@ export default function HomePage() {
       <div id="home" style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 2. Sección Hero Principal */}
-        <section style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center', marginBottom: '40px' }}>
-          <div>
-            <h2 className="font-serif" style={{ fontSize: '3rem', color: 'var(--isn-blue)', lineHeight: 1.15, fontWeight: 900, marginBottom: '24px' }}>
+        <section className="hero-grid" style={{ marginBottom: '40px' }}>
+          <div className="hero-glow" />
+          <div className="hero-enter" style={{ position: 'relative', zIndex: 1 }}>
+            <span style={{ color: 'var(--isn-gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em', fontSize: '0.85rem' }}>
+              Instituto Superior del Norte
+            </span>
+            <h2 className="font-serif" style={{ fontSize: 'clamp(2.25rem, 1.5rem + 3vw, 3.25rem)', color: 'var(--isn-blue)', lineHeight: 1.15, fontWeight: 900, margin: '8px 0 24px' }}>
               Formación superior para el mundo real
             </h2>
             <p style={{ fontSize: '1.15rem', color: 'var(--isn-charcoal)', lineHeight: '1.6', marginBottom: '36px' }}>
               Capacítate bajo estándares oficiales del Instituto Superior del Norte. Desarrolla las competencias obligatorias y certifica tus conocimientos con validez curricular nacional.
             </p>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="hero-cta-row">
               <button
                 onClick={() => scrollToSection('courses')}
                 className="btn btn-emerald-cta"
@@ -266,22 +270,24 @@ export default function HomePage() {
           </div>
 
           {/* 3. Reserva de Espacios para Contenido Gráfico (Hero Side) */}
-          <div className="glass-panel" style={{
+          <div className="glass-panel hero-enter" style={{
             height: '400px',
             overflow: 'hidden',
             borderRadius: '24px',
             position: 'relative',
+            zIndex: 1,
             boxShadow: '0 20px 40px -15px rgba(15, 44, 89, 0.08)',
             border: 'none',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: '#FFFFFF'
+            backgroundColor: '#FFFFFF',
+            animationDelay: '0.15s'
           }}>
-            <img 
-              src={heroGraphic} 
-              alt="Infografía de Formación del Campus" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+            <img
+              src={heroGraphic}
+              alt="Infografía de Formación del Campus"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </div>
         </section>
@@ -354,7 +360,7 @@ export default function HomePage() {
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <span style={{ color: 'var(--isn-gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.85rem' }}>Especialidades Académicas</span>
             <h3 className="font-serif" style={{ fontSize: '2.25rem', color: 'var(--isn-blue)', fontWeight: 800, marginTop: '4px' }}>Programas Disponibles</h3>
-            <div style={{ width: '60px', height: '3px', backgroundColor: 'var(--isn-blue)', margin: '12px auto 0 auto', borderRadius: '2px' }} />
+            <div className="section-divider section-divider--center" />
             <a 
               href={`https://wa.me/${WHATSAPP_PHONE}?text=Hola!%20Necesito%20asesoría%20para%20elegir%20un%20programa%20en%20el%20Instituto%20Superior%20del%20Norte.`} 
               target="_blank" 
@@ -481,12 +487,13 @@ export default function HomePage() {
           marginBottom: '80px',
           position: 'relative'
         }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '48px', position: 'relative', zIndex: 1 }}>
+          <div className="verification-grid" style={{ position: 'relative', zIndex: 1 }}>
             <div>
               <span style={{ color: 'var(--isn-gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.15em', fontSize: '0.85rem' }}>Registro Académico Nacional</span>
-              <h3 className="font-serif" style={{ fontSize: '2rem', color: 'var(--isn-blue)', fontWeight: 900, marginTop: '4px', marginBottom: '16px' }}>
+              <h3 className="font-serif" style={{ fontSize: '2rem', color: 'var(--isn-blue)', fontWeight: 900, marginTop: '4px', marginBottom: 0 }}>
                 Verificación Pública de Diplomas
               </h3>
+              <div className="section-divider" style={{ marginBottom: '16px' }} />
               <p style={{ fontSize: '0.95rem', color: 'var(--isn-charcoal)', lineHeight: '1.6', marginBottom: '24px' }}>
                 Todos los certificados emitidos por el Instituto Superior del Norte poseen un código único de verificación. Los empleadores y autoridades sanitarias pueden comprobar de manera inmediata la autenticidad de cualquier credencial académica en nuestro servidor central.
               </p>
@@ -624,7 +631,7 @@ export default function HomePage() {
         </section>
 
         {/* About Section */}
-        <section id="about" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '48px', alignItems: 'center', paddingBottom: '24px' }}>
+        <section id="about" className="about-grid" style={{ alignItems: 'center', paddingBottom: '24px' }}>
           {/* Graphic Placeholder (About Side) */}
           <div className="glass-panel" style={{
             height: '350px',
@@ -646,9 +653,10 @@ export default function HomePage() {
 
           <div>
             <span style={{ color: 'var(--isn-gold)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.85rem' }}>Sobre Nuestra Institución</span>
-            <h3 className="font-serif" style={{ fontSize: '2.25rem', color: 'var(--isn-blue)', fontWeight: 800, marginTop: '4px', marginBottom: '16px' }}>
+            <h3 className="font-serif" style={{ fontSize: '2.25rem', color: 'var(--isn-blue)', fontWeight: 800, marginTop: '4px', marginBottom: 0 }}>
               Comprometidos con la Calidad Académica
             </h3>
+            <div className="section-divider" style={{ marginBottom: '16px' }} />
             <p style={{ fontSize: '0.95rem', color: 'var(--isn-charcoal)', lineHeight: '1.6', marginBottom: '16px' }}>
               El Instituto Superior del Norte (ISN) es un centro de formación superior enfocado en proveer cursos, diplomados y capacitaciones profesionales con certificación oficial para la inserción en el mercado productivo.
             </p>

@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Institutional default expedition place (fallback for legacy records only).
+ * Shared single source of truth for the Diploma and Acta HTML templates.
+ */
+const INSTITUTION_MUNICIPIO = 'Medellín';
+const INSTITUTION_DEPARTAMENTO = 'Antioquia';
+
 function getAssetAsBase64(filename) {
   try {
     const filePath = path.join(__dirname, '..', 'assets', filename);
@@ -33,6 +40,8 @@ function generateDiplomaTemplate(student, cert, course) {
   const logoBase64 = getAssetAsBase64('logo instituto superior del norte.png');
   const { day, month, year } = getFormattedSpanishDate(cert.fecha_emision);
   const certSeq = cert.numero_certificado ? cert.numero_certificado.replace('AS-2026-', '') : '0001';
+  const ciudad = (student && student.ciudad_expedicion) || INSTITUTION_MUNICIPIO;
+  const departamento = (student && student.departamento_expedicion) || INSTITUTION_DEPARTAMENTO;
 
   return `
     <!DOCTYPE html>
@@ -190,7 +199,7 @@ function generateDiplomaTemplate(student, cert, course) {
         }
         .titulo-nombre {
           font-family: 'UnifrakturMaguntia', serif;
-          font-size: 2.8rem;
+          font-size: 3.4rem;
           color: #0F2C59;
           margin: 5px 0;
           text-shadow: 1px 1px 2px rgba(15, 44, 89, 0.15);
@@ -203,23 +212,6 @@ function generateDiplomaTemplate(student, cert, course) {
           line-height: 1.5;
           margin-bottom: 20px;
           font-weight: 500;
-        }
-
-        .metadatos-pie {
-          display: flex;
-          justify-content: center;
-          gap: 40px;
-          font-size: 0.8rem;
-          color: #1e293b;
-          font-weight: 700;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          padding: 8px 24px;
-          border-radius: 6px;
-          margin-bottom: 20px;
-        }
-        .metadatos-pie span {
-          color: #0F2C59;
         }
 
         .firmas-container {
@@ -299,7 +291,7 @@ function generateDiplomaTemplate(student, cert, course) {
 
           <h3 class="republica-text">REPÚBLICA DE COLOMBIA</h3>
           <h1 class="institucion-text">Instituto Superior del Norte</h1>
-          <p class="resolucion-text">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE MEDELLÍN</p>
+          <p class="resolucion-text">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE ${ciudad.toUpperCase()}</p>
 
           <h2 class="confiere-a">Confiere a:</h2>
 
@@ -310,15 +302,11 @@ function generateDiplomaTemplate(student, cert, course) {
           <h1 class="titulo-nombre">Bachiller Académico</h1>
 
           <p class="cuerpo-text">
-            Por haber cursado y aprobado la totalidad de los estudios correspondientes al nivel de Educación Media Académica, 
+            Por haber cursado y aprobado la totalidad de los estudios correspondientes al nivel de Educación Media Académica,
             según los planes de estudio y programas vigentes de la institución y autorizados por el Ministerio de Educación Nacional.
+            En constancia de ello, el presente título queda inscrito bajo el Acta de Graduación N° ${certSeq}, Folio N° ${certSeq}
+            y Registro N° ${cert.numero_certificado} del libro oficial de diplomas de la institución.
           </p>
-
-          <div class="metadatos-pie">
-            <div>Acta de Graduación No: <span>${certSeq}</span></div>
-            <div>Folio No: <span>${certSeq}</span></div>
-            <div>Registro No: <span>${cert.numero_certificado}</span></div>
-          </div>
         </div>
 
         <div class="firmas-container">
@@ -338,7 +326,7 @@ function generateDiplomaTemplate(student, cert, course) {
         </div>
 
         <div class="fecha-emision-text">
-          Dado en la ciudad de Medellín, Colombia, a los ${day} días del mes de ${month} de ${year}
+          Dado en la ciudad de ${ciudad}, departamento de ${departamento}, Colombia, a los ${day} días del mes de ${month} de ${year}
         </div>
 
         <div class="verificacion-codigo">
@@ -355,6 +343,8 @@ function generateActaTemplate(student, cert, course) {
   const logoBase64 = getAssetAsBase64('logo instituto superior del norte.png');
   const { day, month, year } = getFormattedSpanishDate(cert.fecha_emision);
   const certSeq = cert.numero_certificado ? cert.numero_certificado.replace('AS-2026-', '') : '0001';
+  const ciudad = (student && student.ciudad_expedicion) || INSTITUTION_MUNICIPIO;
+  const departamento = (student && student.departamento_expedicion) || INSTITUTION_DEPARTAMENTO;
 
   return `
     <!DOCTYPE html>
@@ -432,32 +422,6 @@ function generateActaTemplate(student, cert, course) {
           text-indent: 30px;
         }
 
-        .highlight-container {
-          background-color: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 15px 20px;
-          margin: 20px 0;
-        }
-        .highlight-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          font-size: 0.9rem;
-        }
-        .highlight-row:last-child {
-          margin-bottom: 0;
-        }
-        .highlight-label {
-          font-weight: 700;
-          color: #475569;
-        }
-        .highlight-val {
-          font-weight: 700;
-          color: #0F2C59;
-          text-transform: uppercase;
-        }
-
         .firmas-area {
           display: flex;
           justify-content: space-between;
@@ -517,15 +481,15 @@ function generateActaTemplate(student, cert, course) {
           <img class="logo-img" src="${logoBase64}" alt="Logo Instituto" />
         </div>
         <h1 class="header-title">Instituto Superior del Norte</h1>
-        <p class="header-subtitle">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE MEDELLÍN</p>
+        <p class="header-subtitle">RESOLUCIÓN N° 10-50-2373 DE LA SECRETARÍA DE EDUCACIÓN MUNICIPAL DE ${ciudad.toUpperCase()}</p>
       </div>
 
       <h2 class="acta-title">ACTA GENERAL DE GRADUACIÓN N° ${certSeq}</h2>
 
       <div class="acta-body">
         <p>
-          En la ciudad de <strong>Medellín, departamento de Antioquia, República de Colombia</strong>, a los ${day} días del mes de ${month} de ${year}, 
-          se reunieron formalmente en la sede de la Institución Educativa Instituto Superior del Norte, el Rector y la Secretaria Académica con el fin de formalizar 
+          En la ciudad de <strong>${ciudad}, departamento de ${departamento}, República de Colombia</strong>, a los ${day} días del mes de ${month} de ${year},
+          se reunieron formalmente en la sede de la Institución Educativa Instituto Superior del Norte, el Rector y la Secretaria Académica con el fin de formalizar
           y certificar el grado del estudiante del nivel de Educación Media Académica que completó satisfactoriamente sus estudios.
         </p>
         
@@ -535,36 +499,20 @@ function generateActaTemplate(student, cert, course) {
           se autorizó el registro y la foliación del respectivo título.
         </p>
 
-        <div class="highlight-container">
-          <div class="highlight-row">
-            <span class="highlight-label">Estudiante Graduando:</span>
-            <span class="highlight-val">${student.nombre_completo}</span>
-          </div>
-          <div class="highlight-row">
-            <span class="highlight-label">Documento de Identidad:</span>
-            <span class="highlight-val">C.C. N° ${student.cedula}</span>
-          </div>
-          <div class="highlight-row">
-            <span class="highlight-label">Título Otorgado:</span>
-            <span class="highlight-val">Bachiller Académico</span>
-          </div>
-          <div class="highlight-row">
-            <span class="highlight-label">Libro de Registro de Diplomas:</span>
-            <span class="highlight-val">Tomo General de Bachilleres</span>
-          </div>
-          <div class="highlight-row">
-            <span class="highlight-label">Folio del Libro de Registro:</span>
-            <span class="highlight-val">Folio No. ${certSeq}</span>
-          </div>
-        </div>
+        <p>
+          Se deja constancia de que el(la) estudiante <strong>${student.nombre_completo}</strong>, identificado(a) con
+          Cédula de Ciudadanía N° ${student.cedula}, recibe el título de <strong>Bachiller Académico</strong>, el cual queda
+          inscrito en el Tomo General de Bachilleres bajo el Folio N° ${certSeq}, conforme al Acta de Graduación N° ${certSeq}
+          y al Registro N° ${cert.numero_certificado} del libro oficial de diplomas de la institución.
+        </p>
 
         <p>
-          Por lo tanto, se procedió a expedir y hacer entrega formal del respectivo Diploma de Bachiller Académico, 
+          Por lo tanto, se procedió a expedir y hacer entrega formal del respectivo Diploma de Bachiller Académico,
           el cual acredita al graduando ante la sociedad y la comunidad académica del país como egresado idóneo de esta institución.
         </p>
 
         <p>
-          En constancia de lo anterior, se suscribe la presente acta académica de grado por duplicado en la ciudad de Medellín, 
+          En constancia de lo anterior, se suscribe la presente acta académica de grado por duplicado en la ciudad de ${ciudad},
           ante los directivos oficiales que al pie firman.
         </p>
       </div>

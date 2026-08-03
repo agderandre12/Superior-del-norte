@@ -62,23 +62,10 @@ function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Handle URL hash for public verification links and admin deep-link
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#verify=')) {
-        const code = hash.substring(8);
-        navigate(`/verify/${code}`);
-      } else if (hash === '#admin') {
-        navigate('/admin/login');
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    if (window.location.hash.startsWith('#verify=')) {
-      handleHashChange();
-    }
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [navigate]);
+  // NOTE: Legacy hash deep-links (`#verify=CODE`, `#admin`) are normalized to
+  // canonical routes in `main.tsx`, BEFORE HashRouter mounts. Doing it here in
+  // an effect was racy: the catch-all route redirected to "/" during the first
+  // render and clobbered the original hash before this effect could read it.
 
   // FIX: Auth guard uses PRIMITIVE deps (user?.cedula, user?.rol) instead of
   // the full `user` object to avoid stale-closure re-runs on every render.

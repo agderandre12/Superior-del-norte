@@ -172,6 +172,9 @@ const AdminDashboard = () => {
     user,
     adminMetrics,
     adminUsers,
+    adminUsersPage,
+    adminUsersTotalPages,
+    adminUsersTotal,
     courses,
     coursesList,
     fetchAdminMetrics,
@@ -211,6 +214,10 @@ const AdminDashboard = () => {
   const [municipioExpedicion, setMunicipioExpedicion] = useState('');
   const [municipioNacimiento, setMunicipioNacimiento] = useState('');
   const [anioNacimiento, setAnioNacimiento] = useState('');
+  // Bachillerato diploma expedition metadata + explicit certificate issue date.
+  const [departamentoExpedicion, setDepartamentoExpedicion] = useState('');
+  const [ciudadExpedicion, setCiudadExpedicion] = useState('');
+  const [fechaEmisionCertificado, setFechaEmisionCertificado] = useState('');
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [certificarInmediatamente, setCertificarInmediatamente] = useState(false);
   const [studentEmail, setStudentEmail] = useState('');
@@ -234,6 +241,9 @@ const AdminDashboard = () => {
   const [profileMunicipioExpedicion, setProfileMunicipioExpedicion] = useState('');
   const [profileMunicipioNacimiento, setProfileMunicipioNacimiento] = useState('');
   const [profileAnioNacimiento, setProfileAnioNacimiento] = useState('');
+  const [profileDepartamentoExpedicion, setProfileDepartamentoExpedicion] = useState('');
+  const [profileCiudadExpedicion, setProfileCiudadExpedicion] = useState('');
+  const [profileFechaEmisionCertificado, setProfileFechaEmisionCertificado] = useState('');
   const [profilePagoRealizado, setProfilePagoRealizado] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
@@ -245,6 +255,7 @@ const AdminDashboard = () => {
   const [courseTitulo, setCourseTitulo] = useState('');
   const [courseDescripcion, setCourseDescripcion] = useState('');
   const [coursePrecio, setCoursePrecio] = useState('');
+  const [courseLogro, setCourseLogro] = useState('');
   const [courseError, setCourseError] = useState('');
   const [courseSuccess, setCourseSuccess] = useState('');
   const [courseSubmitting, setCourseSubmitting] = useState(false);
@@ -295,7 +306,7 @@ const AdminDashboard = () => {
   // Debounce search by cedula
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      fetchAdminUsers(searchCedula);
+      fetchAdminUsers(searchCedula, 1);
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
@@ -353,6 +364,9 @@ const AdminDashboard = () => {
     setProfileMunicipioExpedicion(student.municipio_expedicion_cedula || '');
     setProfileMunicipioNacimiento(student.municipio_nacimiento || '');
     setProfileAnioNacimiento(student.anio_nacimiento ? student.anio_nacimiento.toString() : '');
+    setProfileDepartamentoExpedicion(student.departamento_expedicion || '');
+    setProfileCiudadExpedicion(student.ciudad_expedicion || '');
+    setProfileFechaEmisionCertificado(student.fecha_emision_certificado || '');
     setProfilePagoRealizado(student.pago_realizado === 1 || student.pago_realizado === true);
     setProfileError('');
     setProfileSuccess('');
@@ -371,6 +385,9 @@ const AdminDashboard = () => {
         municipio_expedicion_cedula: profileMunicipioExpedicion.trim(),
         municipio_nacimiento: profileMunicipioNacimiento.trim(),
         anio_nacimiento: profileAnioNacimiento ? parseInt(profileAnioNacimiento) : null,
+        departamento_expedicion: profileDepartamentoExpedicion.trim() || null,
+        ciudad_expedicion: profileCiudadExpedicion.trim() || null,
+        fecha_emision_certificado: profileFechaEmisionCertificado || null,
         pago_realizado: profilePagoRealizado ? 1 : 0
       });
       setProfileSuccess('¡Perfil de estudiante actualizado con éxito!');
@@ -391,6 +408,7 @@ const AdminDashboard = () => {
     setCourseTitulo(decodeMojibake(course.titulo) || '');
     setCourseDescripcion(decodeMojibake(course.descripcion) || '');
     setCoursePrecio(course.precio ? course.precio.toString() : '');
+    setCourseLogro(decodeMojibake(course.certificado_logro || '') || '');
     setCourseError('');
     setCourseSuccess('');
     setEditingCourseModules([]);
@@ -418,7 +436,8 @@ const AdminDashboard = () => {
       await updateCourse(selectedCourse.id, {
         titulo: courseTitulo.trim(),
         descripcion: courseDescripcion.trim(),
-        precio: parseFloat(coursePrecio)
+        precio: parseFloat(coursePrecio),
+        certificado_logro: courseLogro.trim()
       });
       setCourseSuccess('¡Curso actualizado con éxito!');
       setTimeout(() => {
@@ -555,6 +574,13 @@ const AdminDashboard = () => {
     }
   };
 
+  // True when at least one selected course is the Bachillerato Académico —
+  // drives the conditional requirement of the expedition/issue-date fields.
+  const isBachillerSelected = (selectedCourses || []).some((id: any) => {
+    const c = (courses || []).find((x: any) => x.id.toString() === id.toString());
+    return c && /bachiller/i.test(c.titulo || '');
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLocalError('');
@@ -607,6 +633,14 @@ const AdminDashboard = () => {
       return;
     }
 
+    // Bachillerato diplomas print a real expedition place and issue date, so
+    // these fields become mandatory only when a Bachillerato course is selected.
+    if (isBachillerSelected && (!departamentoExpedicion.trim() || !ciudadExpedicion.trim() || !fechaEmisionCertificado)) {
+      setLocalError('Para el Bachillerato Académico, el departamento de expedición, la ciudad de expedición y la fecha de emisión del certificado son obligatorios.');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await createStudentUser({
         cedula: cleanCedula,
@@ -617,6 +651,9 @@ const AdminDashboard = () => {
         municipio_expedicion_cedula: municipioExpedicion,
         municipio_nacimiento: municipioNacimiento,
         anio_nacimiento: anioNacimiento ? parseInt(anioNacimiento) : null,
+        departamento_expedicion: departamentoExpedicion.trim() || undefined,
+        ciudad_expedicion: ciudadExpedicion.trim() || undefined,
+        fecha_emision_certificado: fechaEmisionCertificado || undefined,
         pago_realizado: pagoRealizado ? 1 : 0,
         certificar_inmediatamente: certificarInmediatamente,
         email: studentEmail.trim() || undefined,
@@ -631,6 +668,9 @@ const AdminDashboard = () => {
       setMunicipioExpedicion('');
       setMunicipioNacimiento('');
       setAnioNacimiento('');
+      setDepartamentoExpedicion('');
+      setCiudadExpedicion('');
+      setFechaEmisionCertificado('');
       setPagoRealizado(false);
       setCertificarInmediatamente(false);
       setStudentEmail('');
@@ -843,7 +883,7 @@ const AdminDashboard = () => {
               borderRadius: '8px',
               fontWeight: 700
             }}>
-              {adminUsers.length} registros
+              {adminUsersTotal} registros
             </span>
           </div>
 
@@ -1109,6 +1149,48 @@ const AdminDashboard = () => {
               </tbody>
             </table>
           </div>
+
+          {adminUsersTotalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '20px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => fetchAdminUsers(undefined, adminUsersPage - 1)}
+                disabled={adminUsersPage <= 1}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: '1px solid #E2E8F0',
+                  background: adminUsersPage <= 1 ? '#F1F5F9' : '#FFFFFF', color: 'var(--text-primary)',
+                  cursor: adminUsersPage <= 1 ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.85rem'
+                }}
+              >
+                ‹ Anterior
+              </button>
+              {Array.from({ length: adminUsersTotalPages }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => fetchAdminUsers(undefined, p)}
+                  style={{
+                    minWidth: '38px', padding: '8px 10px', borderRadius: '8px',
+                    border: p === adminUsersPage ? '1px solid #0F2C59' : '1px solid #E2E8F0',
+                    background: p === adminUsersPage ? '#0F2C59' : '#FFFFFF',
+                    color: p === adminUsersPage ? '#FFFFFF' : 'var(--text-primary)',
+                    cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem'
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => fetchAdminUsers(undefined, adminUsersPage + 1)}
+                disabled={adminUsersPage >= adminUsersTotalPages}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: '1px solid #E2E8F0',
+                  background: adminUsersPage >= adminUsersTotalPages ? '#F1F5F9' : '#FFFFFF', color: 'var(--text-primary)',
+                  cursor: adminUsersPage >= adminUsersTotalPages ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.85rem'
+                }}
+              >
+                Siguiente ›
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1431,6 +1513,61 @@ const AdminDashboard = () => {
                       required
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Datos de expedición del diploma (obligatorios para Bachillerato) */}
+              <div style={{ margin: '8px 0 20px 0', background: isBachillerSelected ? 'rgba(212, 175, 55, 0.07)' : 'rgba(15, 44, 89, 0.02)', padding: '20px', borderRadius: '16px', border: isBachillerSelected ? '1px solid rgba(212, 175, 55, 0.45)' : '1px solid var(--border-glass)' }}>
+                <h4 className="font-serif" style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--isn-blue)', marginBottom: '4px' }}>
+                  Datos de Expedición del Diploma
+                </h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                  {isBachillerSelected
+                    ? 'Obligatorio: se imprimirá en el Diploma y el Acta del Bachillerato seleccionado.'
+                    : 'Opcional para cursos libres. Requerido al matricular Bachillerato Académico.'}
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label className="input-label" htmlFor="student-departamento-expedicion">Departamento de Expedición</label>
+                    <input
+                      className="input-field"
+                      type="text"
+                      id="student-departamento-expedicion"
+                      placeholder="Ej. Antioquia"
+                      value={departamentoExpedicion}
+                      onChange={(e) => setDepartamentoExpedicion(e.target.value)}
+                      disabled={submitting}
+                      required={isBachillerSelected}
+                    />
+                  </div>
+
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label className="input-label" htmlFor="student-ciudad-expedicion">Ciudad de Expedición</label>
+                    <input
+                      className="input-field"
+                      type="text"
+                      id="student-ciudad-expedicion"
+                      placeholder="Ej. Medellín"
+                      value={ciudadExpedicion}
+                      onChange={(e) => setCiudadExpedicion(e.target.value)}
+                      disabled={submitting}
+                      required={isBachillerSelected}
+                    />
+                  </div>
+                </div>
+
+                <div className="input-group" style={{ marginBottom: 0 }}>
+                  <label className="input-label" htmlFor="student-fecha-emision">Fecha de Emisión del Certificado</label>
+                  <input
+                    className="input-field"
+                    type="date"
+                    id="student-fecha-emision"
+                    value={fechaEmisionCertificado}
+                    onChange={(e) => setFechaEmisionCertificado(e.target.value)}
+                    disabled={submitting}
+                    required={isBachillerSelected}
+                  />
                 </div>
               </div>
 
@@ -2037,6 +2174,71 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
+                  {/* Field: Departamento & Ciudad de Expedición del Diploma */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--isn-blue)', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                        Departamento de Expedición
+                      </label>
+                      <input
+                        type="text"
+                        value={profileDepartamentoExpedicion}
+                        onChange={(e) => setProfileDepartamentoExpedicion(e.target.value)}
+                        placeholder="Ej. Antioquia"
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '9999px',
+                          border: '1.5px solid rgba(15, 44, 89, 0.15)',
+                          fontSize: '0.95rem',
+                          outline: 'none',
+                          color: 'var(--text-primary)'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--isn-blue)', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                        Ciudad de Expedición
+                      </label>
+                      <input
+                        type="text"
+                        value={profileCiudadExpedicion}
+                        onChange={(e) => setProfileCiudadExpedicion(e.target.value)}
+                        placeholder="Ej. Medellín"
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '9999px',
+                          border: '1.5px solid rgba(15, 44, 89, 0.15)',
+                          fontSize: '0.95rem',
+                          outline: 'none',
+                          color: 'var(--text-primary)'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Field: Fecha de Emisión del Certificado */}
+                  <div>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--isn-blue)', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Fecha de Emisión del Certificado
+                    </label>
+                    <input
+                      type="date"
+                      value={profileFechaEmisionCertificado}
+                      onChange={(e) => setProfileFechaEmisionCertificado(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '9999px',
+                        border: '1.5px solid rgba(15, 44, 89, 0.15)',
+                        fontSize: '0.95rem',
+                        outline: 'none',
+                        color: 'var(--text-primary)'
+                      }}
+                    />
+                  </div>
+
                   {/* Field: Pago Realizado Switch */}
                   <div style={{
                     display: 'flex',
@@ -2318,6 +2520,32 @@ const AdminDashboard = () => {
                         color: 'var(--text-primary)'
                       }}
                     />
+                  </div>
+
+                  {/* Field: Texto de logro dinámico del certificado */}
+                  <div>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--isn-blue)', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Texto de Logro del Certificado
+                    </label>
+                    <textarea
+                      value={courseLogro}
+                      onChange={(e) => setCourseLogro(e.target.value)}
+                      rows={3}
+                      placeholder="Ej. Por haber aprobado satisfactoriamente la evaluación de conocimientos en primeros auxilios básicos y RCP."
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '20px',
+                        border: '1.5px solid rgba(15, 44, 89, 0.15)',
+                        fontSize: '0.95rem',
+                        outline: 'none',
+                        color: 'var(--text-primary)',
+                        resize: 'none'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                      Texto dinámico impreso en el certificado de este curso. Si se deja vacío, se usa un texto genérico (sin mencionar higiene de alimentos).
+                    </span>
                   </div>
 
                   {/* Modules Sub-list */}

@@ -33,7 +33,11 @@ async function verifyCertificate(req, res, next) {
   }
 
   try {
-    const cert = await db.getCertificate(codigo);
+    // Verification codes are always generated in upper-case (ALIM-XXXX-XXXX).
+    // The format regex above tolerates lower-case input, but the DB lookup is
+    // case-sensitive, so normalize before querying — otherwise a lower-case
+    // code (e.g. from a hand-typed or lower-cased link) would 404 spuriously.
+    const cert = await db.getCertificate(codigo.toUpperCase());
     if (!cert) {
       return res.status(404).json({
         valido: false,

@@ -242,6 +242,12 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
     const isDirect = course && course.certificacion_directa === 1;
     const isHighSchool = pdfService.isHighSchoolCourse(course);
 
+    // Ensure the per-course dynamic achievement text travels with the payload
+    // (email certData is assembled by callers and may not include it).
+    if (course && certData.certificado_logro == null) {
+      certData.certificado_logro = course.certificado_logro || null;
+    }
+
     let attachments = [];
     let subject = `🎓 ¡Felicitaciones! Tu certificado de "${courseTitle}" está listo`;
     let bodyHtml = '';
@@ -254,6 +260,13 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
         nombre_completo: fullUser ? fullUser.nombre_completo : studentData.nombre_completo,
         cedula: studentData.cedula
       };
+
+      // Carry the diploma expedition metadata into certData so the native
+      // generators render the real issue place instead of the default city.
+      if (fullUser) {
+        if (certData.departamento_expedicion == null) certData.departamento_expedicion = fullUser.departamento_expedicion || null;
+        if (certData.ciudad_expedicion == null) certData.ciudad_expedicion = fullUser.ciudad_expedicion || null;
+      }
 
       // Native pdfkit 3-document ecosystem — no Puppeteer dependency.
       const gradesBuffer = await pdfService.pdfToBuffer(pdfService.generateGradesCertificatePDF, studentPayload, certData);
@@ -301,7 +314,7 @@ async function sendCertificateEmail(studentData, certData, courseTitle) {
                        <strong style="color:#0F2C59;">"Bachillerato Académico"</strong>.
                     </p>
                      <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
-                       Se han generado dinámicamente y de manera paralela tus tres documentos oficiales: el <strong>Certificado de Notas</strong>, el <strong>Acta de Grado</strong> y el <strong>Diploma de Bachiller</strong> correspondientes, emitidos en la ciudad de Medellín, Colombia.
+                       Se han generado dinámicamente y de manera paralela tus tres documentos oficiales: el <strong>Certificado de Notas</strong>, el <strong>Acta de Grado</strong> y el <strong>Diploma de Bachiller</strong> correspondientes, emitidos en la ciudad de ${certData.ciudad_expedicion || 'Medellín'}, Colombia.
                      </p>
                      <p style="color:#475569;line-height:1.7;margin:0 0 24px;">
                        Los tres documentos oficiales en formato PDF se encuentran adjuntos en este correo electrónico. También puedes descargarlos y visualizarlos en tu portal de estudiante en cualquier momento.

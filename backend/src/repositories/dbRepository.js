@@ -264,6 +264,9 @@ function setupSqliteDB() {
           municipio_expedicion_cedula TEXT,
           municipio_nacimiento TEXT,
           anio_nacimiento INTEGER,
+          departamento_expedicion TEXT,
+          ciudad_expedicion TEXT,
+          fecha_emision_certificado TEXT,
           pago_realizado INTEGER DEFAULT 0,
           email TEXT,
           vipass INTEGER DEFAULT 0
@@ -277,6 +280,7 @@ function setupSqliteDB() {
           creado_en TEXT,
           precio REAL NOT NULL,
           certificado_template TEXT,
+          certificado_logro TEXT,
           certificacion_directa INTEGER DEFAULT 0
         )`, (err) => { if (err) return reject(err); });
 
@@ -551,6 +555,12 @@ function setupSqliteDB() {
         addColumnIfMissing('municipio_expedicion_cedula', 'TEXT');
         addColumnIfMissing('municipio_nacimiento', 'TEXT');
         addColumnIfMissing('anio_nacimiento', 'INTEGER');
+        // Bachillerato diploma expedition metadata + explicit issue date, all
+        // captured at enrollment time. Nullable for backward-compat: legacy
+        // students fall back to the institutional default city in pdfService.
+        addColumnIfMissing('departamento_expedicion', 'TEXT');
+        addColumnIfMissing('ciudad_expedicion', 'TEXT');
+        addColumnIfMissing('fecha_emision_certificado', 'TEXT');
         addColumnIfMissing('pago_realizado', 'INTEGER DEFAULT 0');
         addColumnIfMissing('email', 'TEXT');
         addColumnIfMissing('vipass', 'INTEGER DEFAULT 0');
@@ -605,9 +615,29 @@ function setupSqliteDB() {
               });
             };
 
+            // Per-course dynamic "achievement / competencies" text rendered on
+            // the free-course certificate. When empty, pdfService falls back to
+            // a generic (non course-specific) statement.
+            const checkCertificadoLogro = () => {
+              return new Promise((resLogro) => {
+                if (!colNamesC.includes('certificado_logro')) {
+                  try {
+                    sqliteDB.run(`ALTER TABLE cursos ADD COLUMN certificado_logro TEXT;`, (alterErr) => {
+                      resLogro();
+                    });
+                  } catch (e) {
+                    resLogro();
+                  }
+                } else {
+                  resLogro();
+                }
+              });
+            };
+
             checkPrice()
               .then(() => checkCertificadoTemplate())
               .then(() => checkCertificacionDirecta())
+              .then(() => checkCertificadoLogro())
               .then(() => {
                 runRemainingSetup(resolve, reject);
               });
@@ -882,6 +912,9 @@ function createUser(cedula, nombre_completo, password, rol = 'estudiante', fecha
       municipio_expedicion_cedula = null,
       municipio_nacimiento = null,
       anio_nacimiento = null,
+      departamento_expedicion = null,
+      ciudad_expedicion = null,
+      fecha_emision_certificado = null,
       pago_realizado = 0,
       email = null,
       vipass = 0
@@ -891,19 +924,22 @@ function createUser(cedula, nombre_completo, password, rol = 'estudiante', fecha
       sqliteDB.run(
         `INSERT INTO usuarios (
           cedula, nombre_completo, password_hash, rol, fecha_registro,
-          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento, pago_realizado,
+          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento,
+          departamento_expedicion, ciudad_expedicion, fecha_emision_certificado, pago_realizado,
           email, vipass
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           cedula, nombre_completo, password_hash, rol, date,
-          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento, pago_realizado,
+          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento,
+          departamento_expedicion, ciudad_expedicion, fecha_emision_certificado, pago_realizado,
           email, vipass ? 1 : 0
         ],
         function (err) {
           if (err) reject(err);
-          else resolve(sanitize({ 
+          else resolve(sanitize({
             cedula, nombre_completo, rol, fecha_registro: date,
-            fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento, pago_realizado,
+            fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento,
+            departamento_expedicion, ciudad_expedicion, fecha_emision_certificado, pago_realizado,
             email, vipass: vipass ? 1 : 0
           }));
         }
@@ -913,16 +949,18 @@ function createUser(cedula, nombre_completo, password, rol = 'estudiante', fecha
       if (exists) {
         reject(new Error('User already exists'));
       } else {
-        const newUser = { 
+        const newUser = {
           cedula, nombre_completo, password_hash, rol, fecha_registro: date,
-          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento, pago_realizado,
+          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento,
+          departamento_expedicion, ciudad_expedicion, fecha_emision_certificado, pago_realizado,
           email, vipass: vipass ? 1 : 0
         };
         jsonDb.users.push(newUser);
         saveJsonDb();
-        resolve(sanitize({ 
+        resolve(sanitize({
           cedula, nombre_completo, rol, fecha_registro: date,
-          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento, pago_realizado,
+          fecha_expedicion_cedula, municipio_expedicion_cedula, municipio_nacimiento, anio_nacimiento,
+          departamento_expedicion, ciudad_expedicion, fecha_emision_certificado, pago_realizado,
           email, vipass: vipass ? 1 : 0
         }));
       }
@@ -1013,8 +1051,13 @@ function getAdminMetrics() {
   });
 }
 
-function getAdminUsers(cedula = '') {
+function getAdminUsers(cedula = '', page = 1, limit = 7) {
   return new Promise((resolve, reject) => {
+    // Server-side pagination (DESC order — newest first).
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 7);
+    const offset = (pageNum - 1) * limitNum;
+
     if (dbType === 'sqlite') {
       let query = `
         SELECT 
@@ -1026,12 +1069,15 @@ function getAdminUsers(cedula = '') {
           u.municipio_expedicion_cedula,
           u.municipio_nacimiento,
           u.anio_nacimiento,
+          u.departamento_expedicion,
+          u.ciudad_expedicion,
+          u.fecha_emision_certificado,
           u.pago_realizado,
           u.email,
           u.vipass,
           (
-            SELECT COUNT(*) 
-            FROM progreso p 
+            SELECT COUNT(*)
+            FROM progreso p
             JOIN modulos m ON p.modulo_id = m.id
             JOIN matriculas mat ON m.curso_id = mat.curso_id AND mat.usuario_cedula = u.cedula
             WHERE p.usuario_cedula = u.cedula AND p.completado = 1
@@ -1059,13 +1105,22 @@ function getAdminUsers(cedula = '') {
         query += ` AND u.cedula LIKE ?`;
         params.push(cedula + '%');
       }
-      sqliteDB.all(query, params, (err, rows) => {
-        if (err) reject(err);
-        else {
+      // Newest first, then server-side pagination (LIMIT/OFFSET).
+      // Tiebreaker is rowid DESC (true insertion order) — fecha_registro is
+      // date-only, so same-day registrations must fall back to who was actually
+      // created last, not to cedula ordering.
+      query += ` ORDER BY u.fecha_registro DESC, u.rowid DESC LIMIT ? OFFSET ?`;
+      // Separate COUNT(*) mirrors the WHERE clause for the paginator metadata.
+      const countQuery = `SELECT COUNT(*) as total FROM usuarios u WHERE u.rol = 'estudiante'${cedula ? ` AND u.cedula LIKE ?` : ''}`;
+      sqliteDB.get(countQuery, params, (errC, countRow) => {
+        if (errC) return reject(errC);
+        const total = countRow ? (countRow.total || 0) : 0;
+        sqliteDB.all(query, [...params, limitNum, offset], (err, rows) => {
+          if (err) return reject(err);
           const results = rows.map(r => {
             const completed = r.completed_count || 0;
-            const total = r.total_count || 0;
-            const progress_pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const moduleTotal = r.total_count || 0;
+            const progress_pct = moduleTotal > 0 ? Math.round((completed / moduleTotal) * 100) : 0;
             return {
               cedula: r.cedula,
               nombre_completo: sanitize(r.nombre_completo),
@@ -1075,6 +1130,9 @@ function getAdminUsers(cedula = '') {
               municipio_expedicion_cedula: r.municipio_expedicion_cedula,
               municipio_nacimiento: r.municipio_nacimiento,
               anio_nacimiento: r.anio_nacimiento,
+              departamento_expedicion: r.departamento_expedicion,
+              ciudad_expedicion: r.ciudad_expedicion,
+              fecha_emision_certificado: r.fecha_emision_certificado,
               pago_realizado: r.pago_realizado || 0,
               email: r.email || null,
               vipass: r.vipass || 0,
@@ -1083,13 +1141,31 @@ function getAdminUsers(cedula = '') {
               certified_courses: r.certified_courses ? r.certified_courses.split(',').map(Number) : []
             };
           });
-          resolve(results);
-        }
+          resolve({
+            users: results,
+            total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum))
+          });
+        });
       });
     } else {
-      const results = jsonDb.users
-        .filter(u => u.rol === 'estudiante' && (!cedula || u.cedula.startsWith(cedula)))
-        .map(u => {
+      const filtered = jsonDb.users
+        .filter(u => u.rol === 'estudiante' && (!cedula || u.cedula.startsWith(cedula)));
+      // Newest first: descending registration date, then insertion order
+      // (later-inserted = more recently created) as the tiebreaker. Mirrors the
+      // SQLite `rowid DESC` behaviour for same-day registrations.
+      const insertionIndex = new Map(jsonDb.users.map((u, i) => [u.cedula, i]));
+      filtered.sort((a, b) => {
+        const da = a.fecha_registro || '';
+        const db = b.fecha_registro || '';
+        if (da < db) return 1;
+        if (da > db) return -1;
+        return (insertionIndex.get(b.cedula) || 0) - (insertionIndex.get(a.cedula) || 0);
+      });
+      const total = filtered.length;
+      const results = filtered.slice(offset, offset + limitNum).map(u => {
           const userMatriculas = (jsonDb.matriculas || []).filter(m => m.usuario_cedula === u.cedula);
           const courseIds = userMatriculas.map(m => m.curso_id);
           const courseModules = (jsonDb.modules || []).filter(m => courseIds.includes(m.curso_id));
@@ -1098,8 +1174,8 @@ function getAdminUsers(cedula = '') {
           const completed = (jsonDb.progress || [])
             .filter(p => p.usuario_cedula === u.cedula && p.completado === 1 && courseModuleIds.includes(p.modulo_id)).length;
           
-          const total = courseModules.length;
-          const progress_pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          const moduleTotal = courseModules.length;
+          const progress_pct = moduleTotal > 0 ? Math.round((completed / moduleTotal) * 100) : 0;
           return {
             cedula: u.cedula,
             nombre_completo: sanitize(u.nombre_completo),
@@ -1109,6 +1185,9 @@ function getAdminUsers(cedula = '') {
             municipio_expedicion_cedula: u.municipio_expedicion_cedula || null,
             municipio_nacimiento: u.municipio_nacimiento || null,
             anio_nacimiento: u.anio_nacimiento || null,
+            departamento_expedicion: u.departamento_expedicion || null,
+            ciudad_expedicion: u.ciudad_expedicion || null,
+            fecha_emision_certificado: u.fecha_emision_certificado || null,
             pago_realizado: u.pago_realizado || 0,
             email: u.email || null,
             vipass: u.vipass || 0,
@@ -1117,7 +1196,13 @@ function getAdminUsers(cedula = '') {
             certified_courses: (jsonDb.certificates || []).filter(c => c.usuario_cedula === u.cedula).map(c => c.curso_id)
           };
         });
-      resolve(results);
+      resolve({
+        users: results,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.max(1, Math.ceil(total / limitNum))
+      });
     }
   });
 }
@@ -1446,10 +1531,16 @@ function getCertificate(verificationCode) {
 function getCertificateByCedula(cedula, courseId = 1) {
   return new Promise((resolve, reject) => {
     if (dbType === 'sqlite') {
+      // JOIN usuarios so the certificate payload carries the diploma expedition
+      // metadata (departamento / ciudad) and the course's dynamic achievement
+      // text. This keeps the PDF generators data-driven without every caller
+      // having to re-thread these fields.
       sqliteDB.get(
-        `SELECT c.*, cur.titulo as curso_titulo, cur.certificado_template
+        `SELECT c.*, cur.titulo as curso_titulo, cur.certificado_template, cur.certificado_logro,
+                u.departamento_expedicion, u.ciudad_expedicion
          FROM certificados c
          LEFT JOIN cursos cur ON c.curso_id = cur.id
+         LEFT JOIN usuarios u ON c.usuario_cedula = u.cedula
          WHERE c.usuario_cedula = ? AND c.curso_id = ?`,
         [cedula, courseId],
         (err, row) => {
@@ -1461,10 +1552,14 @@ function getCertificateByCedula(cedula, courseId = 1) {
       const cert = (jsonDb.certificates || []).find(c => c.usuario_cedula === cedula && c.curso_id === courseId);
       if (cert) {
         const course = jsonDb.courses.find(cur => cur.id === courseId);
+        const user = jsonDb.users.find(u => u.cedula === cedula);
         resolve(sanitize({
           ...cert,
           curso_titulo: course ? course.titulo : 'Manipulación de Alimentos',
-          certificado_template: course ? course.certificado_template : null
+          certificado_template: course ? course.certificado_template : null,
+          certificado_logro: course ? (course.certificado_logro || null) : null,
+          departamento_expedicion: user ? (user.departamento_expedicion || null) : null,
+          ciudad_expedicion: user ? (user.ciudad_expedicion || null) : null
         }));
       } else {
         resolve(null);
@@ -1538,7 +1633,7 @@ function getStudentCourses(cedula) {
 
 // Create course and its modules atomically
 function createCourse(courseData) {
-  const { titulo, descripcion, imagen_url, precio, certificado_template, modulos } = courseData;
+  const { titulo, descripcion, imagen_url, precio, certificado_template, certificado_logro, modulos } = courseData;
   const creado_en = new Date().toISOString().split('T')[0];
 
   return new Promise((resolve, reject) => {
@@ -1548,8 +1643,8 @@ function createCourse(courseData) {
           if (errBegin) return reject(errBegin);
 
           sqliteDB.run(
-            `INSERT INTO cursos (titulo, descripcion, imagen_url, creado_en, precio, certificado_template, certificacion_directa) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [titulo, descripcion, imagen_url, creado_en, precio, certificado_template || null, courseData.certificacion_directa || 0],
+            `INSERT INTO cursos (titulo, descripcion, imagen_url, creado_en, precio, certificado_template, certificado_logro, certificacion_directa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [titulo, descripcion, imagen_url, creado_en, precio, certificado_template || null, certificado_logro || null, courseData.certificacion_directa || 0],
             function (errCourse) {
               if (errCourse) {
                 return sqliteDB.run('ROLLBACK', () => reject(errCourse));
@@ -1559,7 +1654,7 @@ function createCourse(courseData) {
               if (!modulos || modulos.length === 0) {
                 sqliteDB.run('COMMIT', (errCommit) => {
                   if (errCommit) return sqliteDB.run('ROLLBACK', () => reject(errCommit));
-                  resolve({ id: courseId, titulo, descripcion, imagen_url, creado_en, precio, certificado_template, modulos: [] });
+                  resolve({ id: courseId, titulo, descripcion, imagen_url, creado_en, precio, certificado_template, certificado_logro, modulos: [] });
                 });
                 return;
               }
@@ -1599,6 +1694,7 @@ function createCourse(courseData) {
                     creado_en,
                     precio,
                     certificado_template,
+                    certificado_logro,
                     modulos
                   });
                 });
@@ -1611,7 +1707,7 @@ function createCourse(courseData) {
       // JSON DB fallback
       try {
         const courseId = jsonDb.courses.length > 0 ? Math.max(...jsonDb.courses.map(c => c.id)) + 1 : 1;
-        const newCourse = { id: courseId, titulo, descripcion, imagen_url, creado_en, precio: parseFloat(precio), certificado_template: certificado_template || null };
+        const newCourse = { id: courseId, titulo, descripcion, imagen_url, creado_en, precio: parseFloat(precio), certificado_template: certificado_template || null, certificado_logro: certificado_logro || null };
         jsonDb.courses.push(newCourse);
 
         const newModules = [];
@@ -1774,7 +1870,7 @@ function generateVerificationCode() {
 }
 
 function bypassCertify(cedula, courseId, opts = {}) {
-  const { inTransaction = false } = opts;
+  const { inTransaction = false, fechaEmision = null } = opts;
   return new Promise((resolve, reject) => {
     const score = 100;
     const approved = 1;
@@ -1790,7 +1886,10 @@ function bypassCertify(cedula, courseId, opts = {}) {
         );
 
         let fecha;
-        if (esBachillerato) {
+        if (fechaEmision) {
+          // Explicit issue date captured at enrollment always wins.
+          fecha = fechaEmision;
+        } else if (esBachillerato) {
           fecha = getRandomDateFrom2020ToPresent();
         } else {
           const hoy = new Date();
@@ -1882,7 +1981,10 @@ function bypassCertify(cedula, courseId, opts = {}) {
         );
 
         let fecha;
-        if (esBachillerato) {
+        if (fechaEmision) {
+          // Explicit issue date captured at enrollment always wins.
+          fecha = fechaEmision;
+        } else if (esBachillerato) {
           fecha = getRandomDateFrom2020ToPresent();
         } else {
           const hoy = new Date();
@@ -2149,15 +2251,24 @@ function cleanDuplicateCoursesJSON() {
 }
 
 function updateCourse(id, courseData) {
-  const { titulo, descripcion, precio, certificado_template, certificacion_directa } = courseData;
+  const { titulo, descripcion, precio, certificado_template, certificado_logro, certificacion_directa } = courseData;
+  // Only overwrite certificado_logro / certificado_template when the caller
+  // actually provided the key, so a partial update (e.g. title + price only)
+  // never wipes an existing dynamic text. COALESCE keeps the stored value when
+  // the bound parameter is null.
+  const logroProvided = Object.prototype.hasOwnProperty.call(courseData, 'certificado_logro');
   return new Promise((resolve, reject) => {
     if (dbType === 'sqlite') {
       sqliteDB.run(
-        `UPDATE cursos SET titulo = ?, descripcion = ?, precio = ?, certificado_template = ?, certificacion_directa = ? WHERE id = ?`,
-        [titulo, descripcion, precio, certificado_template || null, certificacion_directa || 0, id],
+        `UPDATE cursos SET titulo = ?, descripcion = ?, precio = ?, certificado_template = ?,
+           certificado_logro = CASE WHEN ? = 1 THEN ? ELSE certificado_logro END,
+           certificacion_directa = ? WHERE id = ?`,
+        [titulo, descripcion, precio, certificado_template || null,
+         logroProvided ? 1 : 0, certificado_logro || null,
+         certificacion_directa || 0, id],
         function (err) {
           if (err) reject(err);
-          else resolve({ id, titulo, descripcion, precio, certificado_template });
+          else resolve({ id, titulo, descripcion, precio, certificado_template, certificado_logro });
         }
       );
     } else {
@@ -2167,6 +2278,9 @@ function updateCourse(id, courseData) {
         jsonDb.courses[idx].descripcion = descripcion;
         jsonDb.courses[idx].precio = parseFloat(precio);
         jsonDb.courses[idx].certificado_template = certificado_template || null;
+        if (logroProvided) {
+          jsonDb.courses[idx].certificado_logro = certificado_logro || null;
+        }
         saveJsonDb();
         resolve(jsonDb.courses[idx]);
       } else {
@@ -2210,19 +2324,25 @@ function updateStudentProfile(cedula, profileData) {
     municipio_expedicion_cedula,
     municipio_nacimiento,
     anio_nacimiento,
+    departamento_expedicion = null,
+    ciudad_expedicion = null,
+    fecha_emision_certificado = null,
     pago_realizado
   } = profileData;
 
   return new Promise((resolve, reject) => {
     if (dbType === 'sqlite') {
       sqliteDB.run(
-        `UPDATE usuarios SET 
-          nombre_completo = ?, 
-          fecha_expedicion_cedula = ?, 
-          municipio_expedicion_cedula = ?, 
-          municipio_nacimiento = ?, 
-          anio_nacimiento = ?, 
-          pago_realizado = ? 
+        `UPDATE usuarios SET
+          nombre_completo = ?,
+          fecha_expedicion_cedula = ?,
+          municipio_expedicion_cedula = ?,
+          municipio_nacimiento = ?,
+          anio_nacimiento = ?,
+          departamento_expedicion = ?,
+          ciudad_expedicion = ?,
+          fecha_emision_certificado = ?,
+          pago_realizado = ?
          WHERE cedula = ? AND rol = 'estudiante'`,
         [
           nombre_completo,
@@ -2230,6 +2350,9 @@ function updateStudentProfile(cedula, profileData) {
           municipio_expedicion_cedula,
           municipio_nacimiento,
           anio_nacimiento,
+          departamento_expedicion,
+          ciudad_expedicion,
+          fecha_emision_certificado,
           pago_realizado ? 1 : 0,
           cedula
         ],
@@ -2242,6 +2365,9 @@ function updateStudentProfile(cedula, profileData) {
             municipio_expedicion_cedula,
             municipio_nacimiento,
             anio_nacimiento,
+            departamento_expedicion,
+            ciudad_expedicion,
+            fecha_emision_certificado,
             pago_realizado: pago_realizado ? 1 : 0
           });
         }
@@ -2254,6 +2380,9 @@ function updateStudentProfile(cedula, profileData) {
         jsonDb.users[idx].municipio_expedicion_cedula = municipio_expedicion_cedula;
         jsonDb.users[idx].municipio_nacimiento = municipio_nacimiento;
         jsonDb.users[idx].anio_nacimiento = parseInt(anio_nacimiento);
+        jsonDb.users[idx].departamento_expedicion = departamento_expedicion;
+        jsonDb.users[idx].ciudad_expedicion = ciudad_expedicion;
+        jsonDb.users[idx].fecha_emision_certificado = fecha_emision_certificado;
         jsonDb.users[idx].pago_realizado = pago_realizado ? 1 : 0;
         saveJsonDb();
         resolve(jsonDb.users[idx]);
@@ -2401,7 +2530,10 @@ function createStudentWithEnrollment({ cedula, nombre_completo, password, metada
           const certificates = [];
           if (certificar_inmediatamente) {
             for (const courseId of normalizedCourseIds) {
-              certificates.push(await bypassCertify(cedula, courseId, { inTransaction: true }));
+              certificates.push(await bypassCertify(cedula, courseId, {
+                inTransaction: true,
+                fechaEmision: metadata && metadata.fecha_emision_certificado
+              }));
             }
           }
 
@@ -2435,7 +2567,9 @@ function createStudentWithEnrollment({ cedula, nombre_completo, password, metada
       const certificates = [];
       if (certificar_inmediatamente) {
         for (const courseId of normalizedCourseIds) {
-          certificates.push(await bypassCertify(cedula, courseId));
+          certificates.push(await bypassCertify(cedula, courseId, {
+            fechaEmision: metadata && metadata.fecha_emision_certificado
+          }));
         }
       }
 

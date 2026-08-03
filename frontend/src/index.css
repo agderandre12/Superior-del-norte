@@ -783,33 +783,6 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.4;
 }
 
-.bachiller-meta-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.bachiller-meta-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--isn-cinema-border);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-.bachiller-meta-card .label {
-  font-size: 0.6rem;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: #9CA3AF;
-  font-weight: 700;
-}
-.bachiller-meta-card .value {
-  font-family: 'Courier New', monospace;
-  font-size: 0.92rem;
-  color: var(--isn-gold);
-  font-weight: 700;
-  margin-top: 3px;
-  word-break: break-all;
-}
-
 .bachiller-qr-wrap {
   display: flex;
   flex-direction: column;
@@ -1205,4 +1178,82 @@ h1, h2, h3, h4, h5, h6 {
 
 .btn-emerald-cta:active {
   transform: scale(0.97) translateY(0) !important;
+}
+
+/* ==========================================================================
+   Landing Page Refresh — responsive grids, section rhythm, hero entrance
+   ========================================================================== */
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 48px;
+  align-items: center;
+  position: relative;
+}
+
+.hero-glow {
+  position: absolute;
+  top: -120px;
+  right: -80px;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.14) 0%, rgba(15, 44, 89, 0.05) 45%, transparent 72%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.verification-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 48px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .hero-grid,
+  .verification-grid,
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.section-divider {
+  width: 60px;
+  height: 3px;
+  background-color: var(--isn-blue);
+  border-radius: 2px;
+  margin-top: 12px;
+}
+
+.section-divider--center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-cta-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-enter {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.8s var(--ease-premium) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter,
+  .animate-fade-in-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

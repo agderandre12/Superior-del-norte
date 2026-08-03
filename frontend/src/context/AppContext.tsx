@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 
 export const AppContext = createContext<any>(null);
 
@@ -79,6 +79,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Admin Panel states
   const [adminMetrics, setAdminMetrics] = useState<any>({ usuarios_activos: 0, cursos_completados: 0, cursos_pendientes: 0 });
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminUsersPage, setAdminUsersPage] = useState(1);
+  const [adminUsersTotalPages, setAdminUsersTotalPages] = useState(1);
+  const [adminUsersTotal, setAdminUsersTotal] = useState(0);
+  // Remembers the last query (cedula + page) so post-action refreshes reload the
+  // exact view the admin was on instead of jumping back to page 1.
+  const adminQueryRef = useRef({ cedula: '', page: 1 });
   const [courses, setCourses] = useState<any[]>([]);
   const [coursesList, setCoursesList] = useState<any[]>([]);
   const [financialMetrics, setFinancialMetrics] = useState<any>(null);
@@ -197,6 +203,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setExamStatus(null);
     setAdminMetrics({ usuarios_activos: 0, cursos_completados: 0, cursos_pendientes: 0 });
     setAdminUsers([]);
+    setAdminUsersPage(1);
+    setAdminUsersTotalPages(1);
+    setAdminUsersTotal(0);
+    adminQueryRef.current = { cedula: '', page: 1 };
     setCourses([]);
     setStudentCourses([]);
     setActiveCourseId(null);
@@ -385,18 +395,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   }, [token, API_BASE_URL]);
 
-  const fetchAdminUsers = useCallback(async (cedula: string = '') => {
+  const fetchAdminUsers = useCallback(async (cedula?: string, page?: number) => {
     if (!token) return;
+    // When called without args (post-action refresh), reuse the last query so
+    // the admin stays on the current page instead of resetting to page 1.
+    const qCedula = cedula !== undefined ? cedula : adminQueryRef.current.cedula;
+    const qPage = page !== undefined ? page : adminQueryRef.current.page;
+    adminQueryRef.current = { cedula: qCedula, page: qPage };
     try {
-      const url = cedula
-        ? `${API_BASE_URL}/admin/users?cedula=${cedula}`
-        : `${API_BASE_URL}/admin/users`;
+      const params = new URLSearchParams();
+      if (qCedula) params.set('cedula', qCedula);
+      params.set('page', String(qPage));
+      params.set('limit', '7');
+      const url = `${API_BASE_URL}/admin/users?${params.toString()}`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
-        setAdminUsers(data);
+        setAdminUsers(data.users || []);
+        setAdminUsersPage(data.page || 1);
+        setAdminUsersTotalPages(data.totalPages || 1);
+        setAdminUsersTotal(data.total || 0);
       }
     } catch (err) {
       console.error('Error fetching admin users:', err);
@@ -623,6 +643,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       downloadStudentCertificate,
       adminMetrics,
       adminUsers,
+      adminUsersPage,
+      adminUsersTotalPages,
+      adminUsersTotal,
       courses,
       coursesList,
       fetchAdminMetrics,

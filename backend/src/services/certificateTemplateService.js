@@ -24,6 +24,11 @@
  *   {{CALIFICACION}}            — Grade obtained (percentage)
  *   {{NUMERO_CERTIFICADO}}      — Sequential registry number
  *   {{INTENSIDAD_HORARIA}}      — Course hours (defaults to 3)
+ *   {{DEPARTAMENTO_EXPEDICION}} — Diploma expedition department
+ *   {{CIUDAD_EXPEDICION}}       — Diploma expedition city
+ *   {{MUNICIPIO}}               — Convenience alias for {{CIUDAD_EXPEDICION}}
+ *   {{DEPARTAMENTO}}            — Convenience alias for {{DEPARTAMENTO_EXPEDICION}}
+ *   {{LOGRO}}                   — Per-course dynamic achievement / competency text
  */
 
 const TAG_PATTERNS = [
@@ -39,6 +44,13 @@ const TAG_PATTERNS = [
   ['{{CURSO_TITULO}}', 'curso_titulo'],
   ['{{CALIFICACION}}', 'calificacion_obtenida'],
   ['{{NUMERO_CERTIFICADO}}', 'numero_certificado'],
+  ['{{DEPARTAMENTO_EXPEDICION}}', 'departamento_expedicion'],
+  ['{{CIUDAD_EXPEDICION}}', 'ciudad_expedicion'],
+  // Convenience aliases for the diploma expedition place (municipio/departamento),
+  // matching the fields consumed by the native PDF/HTML renderers.
+  ['{{MUNICIPIO}}', 'ciudad_expedicion'],
+  ['{{DEPARTAMENTO}}', 'departamento_expedicion'],
+  ['{{LOGRO}}', 'certificado_logro'],
 ];
 
 /**
